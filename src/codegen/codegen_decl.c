@@ -207,7 +207,16 @@ void emit_includes_and_aliases(ASTNode *node, FILE *out)
                 fprintf(out, "#include \"%s\"\n", node->include.path);
             }
         }
-        else if (node->type == NODE_TYPE_ALIAS)
+        node = node->next;
+    }
+}
+
+// Emit type aliases (after struct defs so the aliased types exist)
+void emit_type_aliases(ASTNode *node, FILE *out)
+{
+    while (node)
+    {
+        if (node->type == NODE_TYPE_ALIAS)
         {
             fprintf(out, "typedef %s %s;\n", node->type_alias.original_type,
                     node->type_alias.alias);

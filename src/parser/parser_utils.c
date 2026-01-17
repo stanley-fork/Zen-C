@@ -2248,6 +2248,14 @@ char *rewrite_expr_methods(ParserContext *ctx, char *raw)
                 *pc = 0;
             }
 
+            // Resolve type alias if exists (for example: Vec2f -> Vec2_float)
+            const char *resolved_type = find_type_alias(ctx, base_t);
+            if (resolved_type)
+            {
+                free(base_t);
+                base_t = xstrdup(resolved_type);
+            }
+
             ASTNode *def = find_struct_def(ctx, base_t);
             int is_field = 0;
             if (def && (def->type == NODE_STRUCT))
@@ -2299,7 +2307,7 @@ char *rewrite_expr_methods(ParserContext *ctx, char *raw)
                 }
 
                 // Mixin Lookup Logic
-                char target_func[128];
+                char target_func[256];
                 sprintf(target_func, "%s__%s", ptr_check, method);
 
                 char *final_cast = NULL;
@@ -2405,7 +2413,7 @@ char *rewrite_expr_methods(ParserContext *ctx, char *raw)
                     }
                 }
                 // Mixin Lookup Logic (No Parens)
-                char target_func[128];
+                char target_func[256];
                 sprintf(target_func, "%s__%s", ptr_check, method);
 
                 char *final_cast = NULL;

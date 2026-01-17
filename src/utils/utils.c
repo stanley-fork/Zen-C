@@ -535,6 +535,7 @@ CompilerConfig g_config = {0};
 
 void scan_build_directives(ParserContext *ctx, const char *src)
 {
+    (void)ctx; // Currently unused, reserved for future use
     const char *p = src;
     while (*p)
     {

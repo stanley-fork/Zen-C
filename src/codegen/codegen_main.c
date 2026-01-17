@@ -341,6 +341,9 @@ void codegen_node(ParserContext *ctx, ASTNode *node, FILE *out)
             emit_struct_defs(ctx, sorted, out);
         }
 
+        // Emit type aliases after struct defs (so aliased generic types exist)
+        emit_type_aliases(kids, out);
+
         ASTNode *raw_iter = kids;
         while (raw_iter)
         {
