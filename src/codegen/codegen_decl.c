@@ -273,7 +273,15 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                 fprintf(out, "struct %s {", node->strct.name);
             }
             fprintf(out, "\n");
-            codegen_walker(ctx, node->strct.fields, out);
+            if (node->strct.fields)
+            {
+                codegen_walker(ctx, node->strct.fields, out);
+            }
+            else
+            {
+                // C requires at least one member in a struct.
+                fprintf(out, "    char _placeholder;\n");
+            }
             fprintf(out, "}");
 
             if (node->strct.is_packed && node->strct.align)
