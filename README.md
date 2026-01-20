@@ -438,7 +438,7 @@ autofree var types = malloc(1024);
 Zen C treats types with destructors (like `File`, `Vec`, or malloc'd pointers) as **Resources**. To prevent double-free errors, resources cannot be implicitly duplicated.
 
 - **Move by Default**: Assigning a resource variable transfers ownership. The original variable becomes invalid (Moved).
-- **Copy Types**: Simple Plain Old Data (int, Point, etc.) can opt-in to `Copy` behavior, making assignment a duplication.
+- **Copy Types**: Types without destructors may opt-in to `Copy` behavior, making assignment a duplication.
 
 **Diagnostics & Philosophy**:
 If you see an error "Use of moved value", the compiler is telling you: *"This type owns a resource (like memory or a handle) and blindly copying it is unsafe."*
