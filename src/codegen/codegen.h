@@ -39,7 +39,7 @@ void emit_globals(ParserContext *ctx, ASTNode *node, FILE *out);
 void emit_lambda_defs(ParserContext *ctx, FILE *out);
 void emit_protos(ASTNode *node, FILE *out);
 void emit_impl_vtables(ParserContext *ctx, FILE *out);
-void emit_tests_and_runner(ParserContext *ctx, ASTNode *node, FILE *out);
+int emit_tests_and_runner(ParserContext *ctx, ASTNode *node, FILE *out);
 void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes);
 
 // Global state (shared across modules).

@@ -958,8 +958,8 @@ void emit_impl_vtables(ParserContext *ctx, FILE *out)
     }
 }
 
-// Emit test functions and runner
-void emit_tests_and_runner(ParserContext *ctx, ASTNode *node, FILE *out)
+// Emit test functions and runner. Returns number of tests emitted.
+int emit_tests_and_runner(ParserContext *ctx, ASTNode *node, FILE *out)
 {
     ASTNode *cur = node;
     int test_count = 0;
@@ -983,10 +983,7 @@ void emit_tests_and_runner(ParserContext *ctx, ASTNode *node, FILE *out)
         }
         fprintf(out, "}\n\n");
     }
-    else
-    {
-        fprintf(out, "void _z_run_tests() {}\n");
-    }
+    return test_count;
 }
 
 // Emit type definitions-
