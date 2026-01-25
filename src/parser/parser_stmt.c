@@ -1595,10 +1595,15 @@ char *process_printf_sugar(ParserContext *ctx, const char *content, int newline,
             Type *t = expr_node ? expr_node->type_info : NULL;
             char *inferred_type = t ? type_to_string(t) : find_symbol_type(ctx, clean_expr);
 
+            int is_bool = 0;
             if (inferred_type)
             {
-                if (strcmp(inferred_type, "int") == 0 || strcmp(inferred_type, "i32") == 0 ||
-                    strcmp(inferred_type, "bool") == 0)
+                if (strcmp(inferred_type, "bool") == 0)
+                {
+                    format_spec = "%s";
+                    is_bool = 1;
+                }
+                else if (strcmp(inferred_type, "int") == 0 || strcmp(inferred_type, "i32") == 0)
                 {
                     format_spec = "%d";
                 }
@@ -1661,7 +1666,16 @@ char *process_printf_sugar(ParserContext *ctx, const char *content, int newline,
                 strcat(gen, buf);
                 strcat(gen, format_spec);
                 strcat(gen, "\", ");
-                strcat(gen, rw_expr);
+                if (is_bool)
+                {
+                    strcat(gen, "_z_bool_str(");
+                    strcat(gen, rw_expr);
+                    strcat(gen, ")");
+                }
+                else
+                {
+                    strcat(gen, rw_expr);
+                }
                 strcat(gen, "); ");
             }
             else
@@ -1671,9 +1685,9 @@ char *process_printf_sugar(ParserContext *ctx, const char *content, int newline,
                 sprintf(buf, "fprintf(%s, _z_str(", target);
                 strcat(gen, buf);
                 strcat(gen, rw_expr);
-                strcat(gen, "), ");
+                strcat(gen, "), _z_arg(");
                 strcat(gen, rw_expr);
-                strcat(gen, "); ");
+                strcat(gen, ")); ");
             }
         }
 
