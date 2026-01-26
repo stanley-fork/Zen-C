@@ -23,7 +23,9 @@ jobs:
       - name: Organize Documentation
         run: |
           mkdir public
-          mv docs public/
+          # Move the CONTENTS of docs/html directly to public
+          mv docs/html/* public/
+          # Copy the README too
           cp README.md public/
 
       - name: Deploy to z-libs/Zen-C-Docs
