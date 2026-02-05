@@ -732,6 +732,15 @@ impl Point {
 }
 ```
 
+**Self 简写**: 在具有 `self` 参数的方法中，可以使用 `.字段` 作为 `self.字段` 的简写：
+```zc
+impl Point {
+    fn dist(self) -> float {
+        return sqrt(.x * .x + .y * .y);  // 等同于 self.x, self.y
+    }
+}
+```
+
 #### 原始类型方法
 Zen C 允许你使用相同的 `impl` 语法定义原始类型（如 `int`, `bool` 等）的方法。
 

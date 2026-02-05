@@ -1450,6 +1450,48 @@ static ASTNode *parse_intrinsic(ParserContext *ctx, Lexer *l)
 ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
 {
     ASTNode *node = NULL;
+
+    Token peek = lexer_peek(l);
+    if (ctx->in_method_with_self && peek.type == TOK_OP && peek.len == 1 && peek.start[0] == '.')
+    {
+        Token dot_tok = lexer_next(l); // consume .
+        Token member_tok = lexer_peek(l);
+        if (member_tok.type == TOK_IDENT)
+        {
+            lexer_next(l); // consume identifier
+            // Create self node
+            ASTNode *self_node = ast_create(NODE_EXPR_VAR);
+            self_node->var_ref.name = xstrdup("self");
+            self_node->token = dot_tok;
+
+            Type *inner_type = type_new(TYPE_STRUCT);
+            if (ctx->current_impl_struct)
+            {
+                inner_type->name = xstrdup(ctx->current_impl_struct);
+            }
+            else
+            {
+                inner_type->name = xstrdup("Self");
+            }
+            self_node->type_info = type_new_ptr(inner_type);
+            self_node->resolved_type = xstrdup("Self*");
+
+            node = ast_create(NODE_EXPR_MEMBER);
+            node->member.target = self_node;
+            node->member.field = token_strdup(member_tok);
+            node->member.is_pointer_access = 1;
+            node->token = dot_tok;
+
+            // Handle chained member access (.x.y) or method calls (.method())
+            return node;
+        }
+        else
+        {
+            // Not an identifier after dot - error or other handling
+            zpanic_at(dot_tok, "Expected identifier after '.' in self shorthand");
+        }
+    }
+
     Token t = lexer_next(l);
 
     // ** Prefixes **

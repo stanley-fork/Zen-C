@@ -733,6 +733,15 @@ impl Point {
 }
 ```
 
+**Self Shorthand**: In methods with a `self` parameter, you can use `.field` as shorthand for `self.field`:
+```zc
+impl Point {
+    fn dist(self) -> float {
+        return sqrt(.x * .x + .y * .y);  // Equivalent to self.x, self.y
+    }
+}
+```
+
 #### Primitive Methods
 Zen C allows you to define methods on primitive types (like `int`, `bool`, etc.) using the same `impl` syntax.
 

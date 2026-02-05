@@ -319,6 +319,8 @@ struct ParserContext
     // Config/State
     char *current_impl_struct;     ///< Name of struct currently being implemented (in impl block).
     ASTNode *current_impl_methods; ///< Head of method list for current impl block.
+    int in_method_with_self;       ///< 1 if parsing body of method with self parameter.
+    int self_is_pointer;           ///< 1 if self is a pointer receiver (self*).
 
     // Internal tracking
     DeprecatedFunc *deprecated_funcs; ///< Registry of deprecated functions.

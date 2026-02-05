@@ -150,7 +150,20 @@ ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async)
     }
     else
     {
+        // Set self context flags for .member shorthand in methods with self
+        int prev_in_method = ctx->in_method_with_self;
+        int prev_self_ptr = ctx->self_is_pointer;
+        if (args && strstr(args, "self"))
+        {
+            ctx->in_method_with_self = 1;
+            ctx->self_is_pointer = (strstr(args, "self*") != NULL);
+        }
+
         body = parse_block(ctx, l);
+
+        // Restore previous state
+        ctx->in_method_with_self = prev_in_method;
+        ctx->self_is_pointer = prev_self_ptr;
     }
 
     // Check for unused parameters

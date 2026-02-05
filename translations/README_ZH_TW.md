@@ -732,6 +732,15 @@ impl Point {
 }
 ```
 
+**Self 簡寫**: 在具有 `self` 參數的方法中，可以使用 `.欄位` 作為 `self.欄位` 的簡寫：
+```zc
+impl Point {
+    fn dist(self) -> float {
+        return sqrt(.x * .x + .y * .y);  // 等同於 self.x, self.y
+    }
+}
+```
+
 #### 原始類型方法
 Zen C 允許你使用相同的 `impl` 語法在原始類型（如 `int`、`bool` 等）上定義方法。
 

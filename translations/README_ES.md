@@ -733,6 +733,15 @@ impl Point {
 }
 ```
 
+**Atajo de Self**: En métodos con un parámetro `self`, puedes usar `.campo` como abreviatura de `self.campo`:
+```zc
+impl Point {
+    fn dist(self) -> float {
+        return sqrt(.x * .x + .y * .y);  // Equivalente a self.x, self.y
+    }
+}
+```
+
 #### Métodos primitivos
 Zen C permite definir métodos en tipos primitivos (como `int`, `bool`, etc.) usando la misma sintaxis `impl`.
 
