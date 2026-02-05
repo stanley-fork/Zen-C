@@ -238,6 +238,7 @@ typedef struct
     int use_cuda;        ///< 1 if --cuda (emit CUDA-compatible code).
     int use_objc;        ///< 1 if --objc (emit Objective-C compatible code).
     int mode_lsp;        ///< 1 if 'lsp' command (Language Server Protocol).
+    int json_output;     ///< 1 if --json (emit structured JSON diagnostics).
 
     int keep_comments; ///< 1 if --keep-comments (preserve comments in output).
 

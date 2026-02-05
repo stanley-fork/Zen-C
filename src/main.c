@@ -297,11 +297,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Run Semantic Analysis
-    if (check_program(&ctx, root) != 0)
-    {
-        return 1;
-    }
 
     if (g_config.mode_check)
     {
