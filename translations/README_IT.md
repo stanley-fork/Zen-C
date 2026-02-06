@@ -52,10 +52,13 @@ Unisciti alla conversazione, condividi delle demo, fai domande o segnala dei bug
 
 ## Indice
 
-<table>
+<table align="center">
   <tr>
-    <td width="50%" valign="top">
-      <h3>Generale</h3>
+    <th width="50%">Generale</th>
+    <th width="50%">Riferimenti del Linguaggio</th>
+  </tr>
+  <tr>
+    <td valign="top">
       <ul>
         <li><a href="#panoramica">Panoramica</a></li>
         <li><a href="#community">Community</a></li>
@@ -67,8 +70,7 @@ Unisciti alla conversazione, condividi delle demo, fai domande o segnala dei bug
         <li><a href="#attribuzioni">Attribuzioni</a></li>
       </ul>
     </td>
-    <td width="50%" valign="top">
-      <h3>Riferimenti del Linguaggio</h3>
+    <td valign="top">
       <ul>
         <li><a href="#1-variabili-e-costanti">1. Variabili e Costanti</a></li>
         <li><a href="#2-tipi-primitivi">2. Tipi Primitivi</a></li>

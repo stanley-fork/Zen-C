@@ -52,10 +52,13 @@
 
 ## Índice
 
-<table>
+<table align="center">
   <tr>
-    <td width="50%" valign="top">
-      <h3>General</h3>
+    <th width="50%">General</th>
+    <th width="50%">Referencia del Lenguaje</th>
+  </tr>
+  <tr>
+    <td valign="top">
       <ul>
         <li><a href="#descripción-general">Descripción General</a></li>
         <li><a href="#comunidad">Comunidad</a></li>
@@ -67,8 +70,7 @@
         <li><a href="#atribuciones">Atribuciones</a></li>
       </ul>
     </td>
-    <td width="50%" valign="top">
-      <h3>Referencia del Lenguaje</h3>
+    <td valign="top">
       <ul>
         <li><a href="#1-variables-y-constantes">1. Variables y Constantes</a></li>
         <li><a href="#2-tipos-primitivos">2. Tipos Primitivos</a></li>

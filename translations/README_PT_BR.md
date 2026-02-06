@@ -52,10 +52,13 @@ Participe das discussões, compartilhe demos, pergunte, ou reporte bugs no servi
 
 ## Índice
 
-<table>
+<table align="center">
   <tr>
-    <td width="50%" valign="top">
-      <h3>Geral</h3>
+    <th width="50%">Geral</th>
+    <th width="50%">Referência da Linguagem</th>
+  </tr>
+  <tr>
+    <td valign="top">
       <ul>
         <li><a href="#visão-geral">Visão Geral</a></li>
         <li><a href="#comunidade">Comunidade</a></li>
@@ -67,8 +70,7 @@ Participe das discussões, compartilhe demos, pergunte, ou reporte bugs no servi
         <li><a href="#atribuições">Atribuições</a></li>
       </ul>
     </td>
-    <td width="50%" valign="top">
-      <h3>Referência da Linguagem</h3>
+    <td valign="top">
       <ul>
         <li><a href="#1-variáveis-e-constantes">1. Variáveis e Constantes</a></li>
         <li><a href="#2-tipos-primitivos">2. Tipos Primitivos</a></li>

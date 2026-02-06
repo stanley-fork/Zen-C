@@ -52,10 +52,13 @@
 
 ## 目录
 
-<table>
+<table align="center">
   <tr>
-    <td width="50%" valign="top">
-      <h3>通用</h3>
+    <th width="50%">通用</th>
+    <th width="50%">语言参考</th>
+  </tr>
+  <tr>
+    <td valign="top">
       <ul>
         <li><a href="#概述">概述</a></li>
         <li><a href="#社区">社区</a></li>
@@ -67,8 +70,7 @@
         <li><a href="#致谢与归属">致谢与归属</a></li>
       </ul>
     </td>
-    <td width="50%" valign="top">
-      <h3>语言参考</h3>
+    <td valign="top">
       <ul>
         <li><a href="#1-变量与常量">1. 变量与常量</a></li>
         <li><a href="#2-原始类型">2. 原始类型</a></li>

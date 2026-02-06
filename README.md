@@ -52,10 +52,13 @@ Join the discussion, share demos, ask questions, or report bugs in the official 
 
 ## Index
 
-<table>
+<table align="center">
   <tr>
-    <td width="50%" valign="top">
-      <h3>General</h3>
+    <th width="50%">General</th>
+    <th width="50%">Language Reference</th>
+  </tr>
+  <tr>
+    <td valign="top">
       <ul>
         <li><a href="#overview">Overview</a></li>
         <li><a href="#community">Community</a></li>
@@ -67,8 +70,7 @@ Join the discussion, share demos, ask questions, or report bugs in the official 
         <li><a href="#attributions">Attributions</a></li>
       </ul>
     </td>
-    <td width="50%" valign="top">
-      <h3>Language Reference</h3>
+    <td valign="top">
       <ul>
         <li><a href="#1-variables-and-constants">1. Variables & Constants</a></li>
         <li><a href="#2-primitive-types">2. Primitive Types</a></li>
