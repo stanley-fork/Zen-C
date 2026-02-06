@@ -139,6 +139,7 @@ install: $(TARGET)
 	test -f man/zc.1 && $(INSTALL) -m 644 man/zc.1 $(MANDIR)/man1/zc.1 || true
 	test -f man/zc.5 && $(INSTALL) -m 644 man/zc.5 $(MANDIR)/man5/zc.5 || true
 	test -f man/zc.7 && $(INSTALL) -m 644 man/zc.7 $(MANDIR)/man7/zc.7 || true
+	test -f man/zc-stdlib.7 && $(INSTALL) -m 644 man/zc-stdlib.7 $(MANDIR)/man7/zc-stdlib.7 || true
 	
 	# Install standard library
 	$(INSTALL) -d $(SHAREDIR)
@@ -161,6 +162,7 @@ uninstall:
 	$(RM) $(MANDIR)/man1/zc.1
 	$(RM) $(MANDIR)/man5/zc.5
 	$(RM) $(MANDIR)/man7/zc.7
+	$(RM) $(MANDIR)/man7/zc-stdlib.7
 	$(RM) $(SHAREDIR)
 	@echo "=> Uninstalled from $(BINDIR)/$(TARGET)"
 	@echo "=> Removed man pages from $(MANDIR)"
