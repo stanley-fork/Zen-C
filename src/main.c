@@ -51,6 +51,7 @@ void print_usage()
     printf("  -v, --verbose   Verbose output\n");
     printf("  -q, --quiet     Quiet output\n");
     printf("  --json          Emit diagnostics as JSON objects\n");
+    printf("  --no-typecheck  Disable semantic analysis (Typecheck)\n");
     printf("  --no-zen        Disable Zen facts\n");
     printf("  -c              Compile only (produce .o)\n");
     printf("  --cpp           Use C++ mode.\n");
@@ -169,6 +170,10 @@ int main(int argc, char **argv)
         else if (strcmp(arg, "--no-zen") == 0)
         {
             g_config.no_zen = 1;
+        }
+        else if (strcmp(arg, "--no-typecheck") == 0)
+        {
+            g_config.no_typecheck = 1;
         }
         else if (strcmp(arg, "--freestanding") == 0)
         {
@@ -310,11 +315,17 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Run Semantic Analysis (Type Checker) only in check mode for now
-    // to avoid breaking existing tests that rely on looser C-style typing.
+    // Run Semantic Analysis (Type Checker) for all builds unless disabled
+    int tc_result = 0;
+    if (!g_config.no_typecheck)
+    {
+        tc_result = check_program(&ctx, root);
+    }
+
+    // In check mode, exit after type checking
     if (g_config.mode_check)
     {
-        if (check_program(&ctx, root) != 0)
+        if (tc_result != 0)
         {
             return 1;
         }

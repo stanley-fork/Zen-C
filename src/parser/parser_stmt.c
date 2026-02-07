@@ -2843,12 +2843,6 @@ ASTNode *parse_block(ParserContext *ctx, Lexer *l)
             break;
         }
 
-        if (unreachable == 1)
-        {
-            warn_unreachable_code(tk);
-            unreachable = 2; // Warned once, don't spam
-        }
-
         if (tk.type == TOK_COMPTIME)
         {
             // lexer_next(l); // don't eat here, run_comptime_block expects it

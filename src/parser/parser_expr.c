@@ -5513,15 +5513,6 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
             bin->binary.op = token_strdup(op);
         }
 
-        if (strcmp(bin->binary.op, "/") == 0 || strcmp(bin->binary.op, "%") == 0)
-        {
-            if (rhs->type == NODE_EXPR_LITERAL && rhs->literal.type_kind == LITERAL_INT &&
-                rhs->literal.int_val == 0)
-            {
-                warn_division_by_zero(op);
-            }
-        }
-
         if (is_comparison_op(bin->binary.op))
         {
             // Check for identical operands (x == x)
