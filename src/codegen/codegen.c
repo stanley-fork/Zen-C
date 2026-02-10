@@ -776,8 +776,25 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                     // Check if explicitly declared as extern (via `extern` or header scanning)
                     int is_extern = is_extern_symbol(ctx, name);
 
-                    // Only warn if no C interop, not internal, and not explicitly extern
-                    if (!has_c_interop && !is_internal && !is_extern)
+                    // Check whitelist
+                    int is_whitelisted = 0;
+                    if (g_config.c_function_whitelist)
+                    {
+                        char **w = g_config.c_function_whitelist;
+                        while (*w)
+                        {
+                            if (strcmp(*w, name) == 0)
+                            {
+                                is_whitelisted = 1;
+                                break;
+                            }
+                            w++;
+                        }
+                    }
+
+                    // Only warn if no C interop, not internal, not explicitly extern, and not
+                    // whitelisted
+                    if (!has_c_interop && !is_internal && !is_extern && !is_whitelisted)
                     {
                         Token t = node->call.callee->token;
                         char msg[256];
