@@ -1400,6 +1400,53 @@ char *replace_type_str(const char *src, const char *param, const char *concrete,
         }
     }
 
+    size_t len = strlen(src);
+    if (len > 0 && src[len - 1] == ']')
+    {
+        int depth = 0;
+        int bracket_idx = -1;
+        for (int i = len - 1; i >= 0; i--)
+        {
+            if (src[i] == ']')
+            {
+                depth++;
+            }
+            else if (src[i] == '[')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    bracket_idx = i;
+                    break;
+                }
+            }
+        }
+
+        if (bracket_idx > 0)
+        {
+            char *base = xmalloc(bracket_idx + 1);
+            strncpy(base, src, bracket_idx);
+            base[bracket_idx] = 0;
+
+            char *new_base = replace_type_str(base, param, concrete, old_struct, new_struct);
+
+            if (new_base && strcmp(new_base, base) != 0)
+            {
+                char *suffix = (char *)src + bracket_idx;
+                char *res = xmalloc(strlen(new_base) + strlen(suffix) + 1);
+                sprintf(res, "%s%s", new_base, suffix);
+                free(base);
+                free(new_base);
+                return res;
+            }
+            free(base);
+            if (new_base)
+            {
+                free(new_base);
+            }
+        }
+    }
+
     if (param && strcmp(src, param) == 0)
     {
 
@@ -1469,7 +1516,7 @@ char *replace_type_str(const char *src, const char *param, const char *concrete,
         }
     }
 
-    size_t len = strlen(src);
+    len = strlen(src);
     if (len > 1 && src[len - 1] == '*')
     {
         char *base = xmalloc(len);
