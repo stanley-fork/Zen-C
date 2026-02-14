@@ -133,8 +133,15 @@ void emit_preamble(ParserContext *ctx, FILE *out)
         fputs("void z_panic(const char* msg) { fprintf(stderr, \"Panic: %s\\n\", "
               "msg); exit(1); }\n",
               out);
-        fputs("static const unsigned char _zc_abi_v1[]"
-              " __attribute__((used,section(\".note.zarch\"))) = {"
+        fputs("#if defined(__APPLE__)\n"
+              "#define _ZC_SEC __attribute__((used,section(\"__DATA,__zarch\")))\n"
+              "#elif defined(_WIN32)\n"
+              "#define _ZC_SEC __attribute__((used))\n"
+              "#else\n"
+              "#define _ZC_SEC __attribute__((used,section(\".note.zarch\")))\n"
+              "#endif\n",
+              out);
+        fputs("static const unsigned char _zc_abi_v1[] _ZC_SEC = {"
               "0x07,0xd5,"
               "0x59,0x30,0x7c,0x7f,0x66,0x75,0x30,0x69,"
               "0x7f,0x65,0x3c,0x30,0x59,0x7c,0x79,0x7e,"
