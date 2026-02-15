@@ -1,6 +1,6 @@
 
 def CONST_HEX = 0x10;
-def CONST_OCT = 010;
+def CONST_OCT = 0o10;
 
 fn main() {
     if (CONST_HEX != 16) {

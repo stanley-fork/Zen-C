@@ -1275,7 +1275,7 @@ static int is_valid_int_suffix(const char *s)
     return 0;
 }
 
-// Parse integer literal (decimal, hex, binary)
+// Parse integer literal (decimal, hex, binary, octal)
 static ASTNode *parse_int_literal(Token t)
 {
     ASTNode *node = ast_create(NODE_EXPR_LITERAL);
@@ -1286,13 +1286,21 @@ static ASTNode *parse_int_literal(Token t)
     unsigned long long val;
     char *endptr = NULL;
 
-    if (t.len > 2 && s[0] == '0' && s[1] == 'b')
+    if (t.len > 2 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B'))
     {
         val = strtoull(s + 2, &endptr, 2);
     }
+    else if (t.len > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+    {
+        val = strtoull(s + 2, &endptr, 16);
+    }
+    else if (t.len > 2 && s[0] == '0' && (s[1] == 'o' || s[1] == 'O'))
+    {
+        val = strtoull(s + 2, &endptr, 8);
+    }
     else
     {
-        val = strtoull(s, &endptr, 0);
+        val = strtoull(s, &endptr, 10);
     }
 
     // Validate suffix

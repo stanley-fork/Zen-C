@@ -292,8 +292,13 @@ Token lexer_next(Lexer *l)
     if (isdigit(*s))
     {
         int len = 0;
+        int is_hex = 0;
+        int is_bin = 0;
+        int is_oct = 0;
+
         if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
         {
+            is_hex = 1;
             len = 2;
             while (isxdigit(s[len]))
             {
@@ -302,8 +307,18 @@ Token lexer_next(Lexer *l)
         }
         else if (s[0] == '0' && (s[1] == 'b' || s[1] == 'B'))
         {
+            is_bin = 1;
             len = 2;
             while (s[len] == '0' || s[len] == '1')
+            {
+                len++;
+            }
+        }
+        else if (s[0] == '0' && (s[1] == 'o' || s[1] == 'O'))
+        {
+            is_oct = 1;
+            len = 2;
+            while (s[len] >= '0' && s[len] <= '7')
             {
                 len++;
             }
@@ -314,31 +329,53 @@ Token lexer_next(Lexer *l)
             {
                 len++;
             }
+        }
+
+        if (!is_hex && !is_bin && !is_oct)
+        {
+            int is_float = 0;
             if (s[len] == '.')
             {
                 if (s[len + 1] != '.')
                 {
+                    is_float = 1;
                     len++;
                     while (isdigit(s[len]))
                     {
                         len++;
                     }
-                    // Consume float suffix (e.g. 1.0f)
-                    if (is_ident_start(s[len]))
-                    {
-                        while (is_ident_char(s[len]))
-                        {
-                            len++;
-                        }
-                    }
-                    l->pos += len;
-                    l->col += len;
-                    return (Token){TOK_FLOAT, s, len, start_line, start_col};
                 }
+            }
+
+            if (s[len] == 'e' || s[len] == 'E')
+            {
+                is_float = 1;
+                len++;
+                if (s[len] == '+' || s[len] == '-')
+                {
+                    len++;
+                }
+                while (isdigit(s[len]))
+                {
+                    len++;
+                }
+            }
+
+            if (is_float)
+            {
+                if (is_ident_start(s[len]))
+                {
+                    while (is_ident_char(s[len]))
+                    {
+                        len++;
+                    }
+                }
+                l->pos += len;
+                l->col += len;
+                return (Token){TOK_FLOAT, s, len, start_line, start_col};
             }
         }
 
-        // Consume integer suffix (e.g. 1u, 100u64, 1L)
         if (is_ident_start(s[len]))
         {
             while (is_ident_char(s[len]))
