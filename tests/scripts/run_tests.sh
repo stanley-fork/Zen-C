@@ -12,7 +12,13 @@
 # Configuration
 ZC="./zc"
 if [ ! -f "$ZC" ]; then
-    ZC="./build/zc"
+    if [ -f "./zc.exe" ]; then
+        ZC="./zc.exe"
+    elif [ -f "./build/zc" ]; then
+        ZC="./build/zc"
+    elif [ -f "./build/zc.exe" ]; then
+        ZC="./build/zc.exe"
+    fi
 fi
 TEST_DIR="tests"
 PASSED=0
