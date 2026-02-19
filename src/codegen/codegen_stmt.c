@@ -154,39 +154,39 @@ static bool is_int_type(TypeKind k)
 {
     switch (k)
     {
-        case TYPE_CHAR:
-        case TYPE_I8:
-        case TYPE_U8:
-        case TYPE_I16:
-        case TYPE_U16:
-        case TYPE_I32:
-        case TYPE_U32:
-        case TYPE_I64:
-        case TYPE_U64:
-        case TYPE_I128:
-        case TYPE_U128:
-        case TYPE_INT:
-        case TYPE_UINT:
-        case TYPE_USIZE:
-        case TYPE_ISIZE:
-        case TYPE_BYTE:
-        case TYPE_RUNE:
-        case TYPE_ENUM:
-        case TYPE_C_INT:
-        case TYPE_C_UINT:
-        case TYPE_C_LONG:
-        case TYPE_C_ULONG:
-        case TYPE_C_LONG_LONG:
-        case TYPE_C_ULONG_LONG:
-        case TYPE_C_SHORT:
-        case TYPE_C_USHORT:
-        case TYPE_C_CHAR:
-        case TYPE_C_UCHAR:
-        case TYPE_BITINT:
-        case TYPE_UBITINT:
-            return true;
-        default:
-            return false;
+    case TYPE_CHAR:
+    case TYPE_I8:
+    case TYPE_U8:
+    case TYPE_I16:
+    case TYPE_U16:
+    case TYPE_I32:
+    case TYPE_U32:
+    case TYPE_I64:
+    case TYPE_U64:
+    case TYPE_I128:
+    case TYPE_U128:
+    case TYPE_INT:
+    case TYPE_UINT:
+    case TYPE_USIZE:
+    case TYPE_ISIZE:
+    case TYPE_BYTE:
+    case TYPE_RUNE:
+    case TYPE_ENUM:
+    case TYPE_C_INT:
+    case TYPE_C_UINT:
+    case TYPE_C_LONG:
+    case TYPE_C_ULONG:
+    case TYPE_C_LONG_LONG:
+    case TYPE_C_ULONG_LONG:
+    case TYPE_C_SHORT:
+    case TYPE_C_USHORT:
+    case TYPE_C_CHAR:
+    case TYPE_C_UCHAR:
+    case TYPE_BITINT:
+    case TYPE_UBITINT:
+        return true;
+    default:
+        return false;
     }
 }
 
