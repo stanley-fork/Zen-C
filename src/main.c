@@ -346,8 +346,9 @@ int main(int argc, char **argv)
         else if (arg[0] == '-')
         {
             // Unknown flag or C flag
-            strcat(g_config.gcc_flags, " ");
-            strcat(g_config.gcc_flags, arg);
+            
+            size_t len = strlen(g_config.gcc_flags);
+            snprintf(g_config.gcc_flags + len, sizeof(g_config.gcc_flags) - len, " %s", arg);
         }
         else
         {
@@ -606,8 +607,8 @@ int main(int argc, char **argv)
     char extra_c_sources[4096] = {0};
     for (int i = 0; i < g_config.c_file_count; i++)
     {
-        strcat(extra_c_sources, " ");
-        strcat(extra_c_sources, g_config.c_files[i]);
+       size_t len = strlen(extra_c_sources);
+        snprintf(extra_c_sources + len, sizeof(extra_c_sources) - len, " %s", g_config.c_files[i]);
     }
 
     // Build command
@@ -637,13 +638,20 @@ int main(int argc, char **argv)
     if (g_config.mode_run)
     {
         char run_cmd[2048];
+        int n;
         if (z_is_windows())
         {
-            sprintf(run_cmd, "%s", outfile);
+             n = snprintf(run_cmd, sizeof(run_cmd), "%s", outfile);
         }
         else
         {
-            sprintf(run_cmd, "./%s", outfile);
+            n = snprintf(run_cmd, sizeof(run_cmd), "./%s", outfile);
+        }
+
+        if (n < 0 || n >= (int)sizeof(run_cmd))
+        {
+            fprintf(stderr, COLOR_BOLD COLOR_RED "error" COLOR_RESET ": run command too long\n");
+            return 1;
         }
         if (!g_config.quiet)
         {
