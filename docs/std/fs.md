@@ -14,7 +14,8 @@ fn main() {
         let file = res.unwrap();
         let content = file.read_to_string();
         if (content.is_ok()) {
-            println "{content.unwrap()}";
+            let s = content.unwrap();
+            println "{s.c_str()}";
         }
         file.close();
     }

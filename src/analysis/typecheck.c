@@ -120,6 +120,49 @@ static void check_node(TypeChecker *tc, ASTNode *node);
 static void check_expr_lambda(TypeChecker *tc, ASTNode *node);
 static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, Token t);
 
+static void check_move_for_rvalue(TypeChecker *tc, ASTNode *rvalue)
+{
+    if (!rvalue || !rvalue->type_info)
+    {
+        return;
+    }
+
+    if (is_type_copy(tc->pctx, rvalue->type_info))
+    {
+        return;
+    }
+
+    if (rvalue->type == NODE_EXPR_VAR)
+    {
+        ZenSymbol *sym = tc_lookup(tc, rvalue->var_ref.name);
+        if (sym)
+        {
+            mark_symbol_moved(tc->pctx, sym, rvalue);
+        }
+    }
+    else if (rvalue->type == NODE_EXPR_UNARY && strcmp(rvalue->unary.op, "*") == 0)
+    {
+        const char *hints[] = {"This type owns resources and cannot be implicitly copied",
+                               "Consider borrowing value via references or implementing Copy",
+                               NULL};
+        zerror_with_hints(rvalue->token, "Cannot move out of a borrowed reference", hints);
+        tc->error_count++;
+    }
+    else if (rvalue->type == NODE_EXPR_MEMBER)
+    {
+        const char *hints[] = {
+            "Cannot move a field out of a struct. Consider cloning or borrowing.", NULL};
+        zerror_with_hints(rvalue->token, "Cannot move out of a struct field", hints);
+        tc->error_count++;
+    }
+    else if (rvalue->type == NODE_EXPR_INDEX)
+    {
+        const char *hints[] = {"Cannot move an element out of an array or slice.", NULL};
+        zerror_with_hints(rvalue->token, "Cannot move out of an index expression", hints);
+        tc->error_count++;
+    }
+}
+
 static Type *resolve_alias(Type *t)
 {
     while (t && t->kind == TYPE_ALIAS && t->inner)
@@ -166,6 +209,12 @@ static void check_expr_unary(TypeChecker *tc, ASTNode *node)
     // Dereference: *
     if (strcmp(op, "*") == 0)
     {
+        if (operand_type->kind == TYPE_UNKNOWN)
+        {
+            node->type_info = type_new(TYPE_UNKNOWN);
+            return;
+        }
+
         Type *resolved = resolve_alias(operand_type);
         if (resolved->kind != TYPE_POINTER && resolved->kind != TYPE_STRING)
         {
@@ -201,12 +250,24 @@ static void check_expr_unary(TypeChecker *tc, ASTNode *node)
 
 static void check_expr_binary(TypeChecker *tc, ASTNode *node)
 {
-    check_node(tc, node->binary.left);
-    check_node(tc, node->binary.right);
+    const char *op = node->binary.op;
+
+    if (strcmp(op, "=") == 0)
+    {
+        int old_is_assign_lhs = tc->is_assign_lhs;
+        tc->is_assign_lhs = 1;
+        check_node(tc, node->binary.left);
+        tc->is_assign_lhs = old_is_assign_lhs;
+        check_node(tc, node->binary.right);
+    }
+    else
+    {
+        check_node(tc, node->binary.left);
+        check_node(tc, node->binary.right);
+    }
 
     Type *left_type = node->binary.left->type_info;
     Type *right_type = node->binary.right->type_info;
-    const char *op = node->binary.op;
 
     // Assignment Logic for Moves (and type compatibility)
     if (strcmp(op, "=") == 0)
@@ -217,15 +278,8 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
             check_type_compatibility(tc, left_type, right_type, node->binary.right->token);
         }
 
-        // If RHS is a var, it might Move
-        if (node->binary.right->type == NODE_EXPR_VAR)
-        {
-            ZenSymbol *rhs_sym = tc_lookup(tc, node->binary.right->var_ref.name);
-            if (rhs_sym)
-            {
-                mark_symbol_moved(tc->pctx, rhs_sym, node);
-            }
-        }
+        // If RHS is moving a non-copy value, check validity and mark moved
+        check_move_for_rvalue(tc, node->binary.right);
 
         // LHS is being (re-)initialized, so it becomes Valid.
         if (node->binary.left->type == NODE_EXPR_VAR)
@@ -233,7 +287,7 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
             ZenSymbol *lhs_sym = tc_lookup(tc, node->binary.left->var_ref.name);
             if (lhs_sym)
             {
-                mark_symbol_valid(lhs_sym);
+                mark_symbol_valid(tc->pctx, lhs_sym, node);
             }
         }
 
@@ -301,6 +355,12 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
 
             if (!left_numeric || !right_numeric)
             {
+                if (left_type->kind == TYPE_UNKNOWN || right_type->kind == TYPE_UNKNOWN)
+                {
+                    node->type_info = type_new(TYPE_UNKNOWN);
+                    return;
+                }
+
                 char msg[256];
                 snprintf(msg, sizeof(msg), "Operator '%s' requires numeric operands", op);
                 const char *hints[] = {
@@ -339,6 +399,12 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
 
             if (!left_numeric || !right_numeric)
             {
+                if ((left_type && left_type->kind == TYPE_UNKNOWN) ||
+                    (right_type && right_type->kind == TYPE_UNKNOWN))
+                {
+                    node->type_info = type_new(TYPE_BOOL);
+                    return;
+                }
                 char msg[256];
                 snprintf(msg, sizeof(msg), "Cannot compare '%s' with incompatible types", op);
                 const char *hints[] = {"Ensure both operands have the same or compatible types",
@@ -504,19 +570,50 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node)
 
             if (expected && actual)
             {
+                if (expected->kind == TYPE_FUNCTION && actual->kind == TYPE_FUNCTION)
+                {
+                    for (int j = 0; j < expected->arg_count && j < actual->arg_count; j++)
+                    {
+                        if (actual->args && actual->args[j] &&
+                            actual->args[j]->kind == TYPE_UNKNOWN && expected->args &&
+                            expected->args[j] && expected->args[j]->kind != TYPE_UNKNOWN)
+                        {
+                            *actual->args[j] = *expected->args[j];
+                        }
+                    }
+                    if (actual->inner && actual->inner->kind == TYPE_UNKNOWN && expected->inner)
+                    {
+                        *actual->inner = *expected->inner;
+                    }
+                }
                 check_type_compatibility(tc, expected, actual, arg->token);
             }
         }
-
-        // If argument is passed by VALUE, and it's a variable, it MOVES.
-        if (arg->type == NODE_EXPR_VAR)
+        else if (!sig && node->call.callee->type_info &&
+                 node->call.callee->type_info->kind == TYPE_FUNCTION)
         {
-            ZenSymbol *sym = tc_lookup(tc, arg->var_ref.name);
-            if (sym)
+            Type *callee_t = node->call.callee->type_info;
+            if (arg_idx < callee_t->arg_count && callee_t->args && callee_t->args[arg_idx])
             {
-                mark_symbol_moved(tc->pctx, sym, node);
+                Type *expected = callee_t->args[arg_idx];
+                Type *actual = arg->type_info;
+
+                if (expected && actual)
+                {
+                    if (expected->kind == TYPE_UNKNOWN && actual->kind != TYPE_UNKNOWN)
+                    {
+                        *expected = *actual;
+                    }
+                    else
+                    {
+                        check_type_compatibility(tc, expected, actual, arg->token);
+                    }
+                }
             }
         }
+
+        // If argument is passed by VALUE, check if it can be moved.
+        check_move_for_rvalue(tc, arg);
 
         arg = arg->next;
         arg_idx++;
@@ -731,8 +828,32 @@ static int stmt_always_returns(ASTNode *stmt)
         return 0;
 
     case NODE_MATCH:
-        // TODO: Check all cases return and there's a default
-        return 0;
+    {
+        if (!stmt->match_stmt.cases)
+        {
+            return 0;
+        }
+
+        int has_default = 0;
+        ASTNode *case_node = stmt->match_stmt.cases;
+        while (case_node)
+        {
+            if (case_node->type == NODE_MATCH_CASE)
+            {
+                if (!stmt_always_returns(case_node->match_case.body))
+                {
+                    return 0;
+                }
+                if (case_node->match_case.is_default)
+                {
+                    has_default = 1;
+                }
+            }
+            case_node = case_node->next;
+        }
+
+        return has_default;
+    }
 
     case NODE_LOOP:
         return 0;
@@ -768,6 +889,9 @@ static void check_function(TypeChecker *tc, ASTNode *node)
 
     tc->current_func = node;
     tc_enter_scope(tc);
+
+    MoveState *prev_move_state = tc->pctx->move_state;
+    tc->pctx->move_state = move_state_create(NULL);
 
     for (int i = 0; i < node->func.arg_count; i++)
     {
@@ -806,6 +930,9 @@ static void check_function(TypeChecker *tc, ASTNode *node)
         }
     }
 
+    move_state_free(tc->pctx->move_state);
+    tc->pctx->move_state = prev_move_state;
+
     tc_exit_scope(tc);
     tc->current_func = NULL;
 }
@@ -820,7 +947,10 @@ static void check_expr_var(TypeChecker *tc, ASTNode *node)
     }
 
     // Check for Use-After-Move
-    check_use_validity(tc, node, sym);
+    if (!tc->is_assign_lhs)
+    {
+        check_use_validity(tc, node, sym);
+    }
 }
 
 static void check_expr_literal(TypeChecker *tc, ASTNode *node)
@@ -1249,6 +1379,17 @@ static void check_node(TypeChecker *tc, ASTNode *node)
             }
         }
         break;
+    case NODE_TEST:
+    {
+        MoveState *prev_move_state = tc->pctx->move_state;
+        tc->pctx->move_state = move_state_create(NULL);
+
+        check_node(tc, node->test_stmt.body);
+
+        move_state_free(tc->pctx->move_state);
+        tc->pctx->move_state = prev_move_state;
+        break;
+    }
     case NODE_EXPR_CAST:
         // Check the expression being cast
         check_node(tc, node->cast.expr);
@@ -1339,7 +1480,26 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         }
         break;
     case NODE_ASM:
-        // TODO: Implement.
+        for (int i = 0; i < node->asm_stmt.num_outputs; i++)
+        {
+            if (!tc_lookup(tc, node->asm_stmt.outputs[i]))
+            {
+                char msg[256];
+                snprintf(msg, sizeof(msg), "Undefined output variable in inline assembly: '%s'",
+                         node->asm_stmt.outputs[i]);
+                tc_error(tc, node->token, msg);
+            }
+        }
+        for (int i = 0; i < node->asm_stmt.num_inputs; i++)
+        {
+            if (!tc_lookup(tc, node->asm_stmt.inputs[i]))
+            {
+                char msg[256];
+                snprintf(msg, sizeof(msg), "Undefined input variable in inline assembly: '%s'",
+                         node->asm_stmt.inputs[i]);
+                tc_error(tc, node->token, msg);
+            }
+        }
         break;
     case NODE_LAMBDA:
         check_expr_lambda(tc, node);
@@ -1356,15 +1516,8 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         // Special case for Return to trigger move?
         if (node->type == NODE_RETURN && node->ret.value)
         {
-            // If returning a variable by value, it is moved.
-            if (node->ret.value->type == NODE_EXPR_VAR)
-            {
-                ZenSymbol *sym = tc_lookup(tc, node->ret.value->var_ref.name);
-                if (sym)
-                {
-                    mark_symbol_moved(tc->pctx, sym, node);
-                }
-            }
+            // If returning a value, check if it can be moved.
+            check_move_for_rvalue(tc, node->ret.value);
         }
         break;
     }
@@ -1415,6 +1568,9 @@ static void check_expr_lambda(TypeChecker *tc, ASTNode *node)
         tc_add_symbol(tc, pname, ptype, node->token);
     }
 
+    MoveState *prev_move_state = tc->pctx->move_state;
+    tc->pctx->move_state = move_state_create(NULL);
+
     if (node->lambda.body)
     {
         if (node->lambda.body->type == NODE_BLOCK)
@@ -1426,6 +1582,9 @@ static void check_expr_lambda(TypeChecker *tc, ASTNode *node)
             check_node(tc, node->lambda.body);
         }
     }
+
+    move_state_free(tc->pctx->move_state);
+    tc->pctx->move_state = prev_move_state;
 
     tc_exit_scope(tc);
 }

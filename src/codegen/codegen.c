@@ -84,7 +84,8 @@ static void codegen_var_expr(ParserContext *ctx, ASTNode *node, FILE *out)
 
     if (node->resolved_type && strcmp(node->resolved_type, "unknown") == 0)
     {
-        if (node->var_ref.suggestion && !ctx->silent_warnings)
+        if (node->var_ref.suggestion && !ctx->silent_warnings &&
+            !find_func(ctx, node->var_ref.name))
         {
             char msg[256];
             char help[256];
@@ -734,11 +735,21 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                 free(ret);
                 ret = xstrdup("char*");
             }
+            if (strcmp(ret, "unknown") == 0)
+            {
+                free(ret);
+                ret = xstrdup("void*");
+            }
 
             fprintf(out, "((%s (*)(void*", ret);
             for (int i = 0; i < ft->arg_count; i++)
             {
                 char *as = codegen_type_to_string(ft->args[i]);
+                if (strcmp(as, "unknown") == 0)
+                {
+                    free(as);
+                    as = xstrdup("void*");
+                }
                 fprintf(out, ", %s", as);
                 free(as);
             }
@@ -1664,13 +1675,11 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                 f->var_decl.init_expr->literal.type_kind == LITERAL_INT &&
                 f->var_decl.init_expr->literal.int_val == 0)
             {
-                // Universal zero initializer {0} works for both scalars and aggregates
-                // and fixes TCC issues with 0-init of structs.
                 fprintf(out, "{0}");
             }
             else
             {
-                codegen_expression(ctx, f->var_decl.init_expr, out);
+                codegen_expression_with_move(ctx, f->var_decl.init_expr, out);
             }
             if (f->next)
             {

@@ -323,11 +323,49 @@ void emit_lambda_defs(ParserContext *ctx, FILE *out)
             fprintf(out, "};\n");
         }
 
-        fprintf(out, "%s _lambda_%d(void* _ctx", node->lambda.return_type, node->lambda.lambda_id);
+        char *ret_type_str = node->lambda.return_type;
+        if (node->type_info && node->type_info->inner &&
+            node->type_info->inner->kind != TYPE_UNKNOWN)
+        {
+            ret_type_str = type_to_string(node->type_info->inner);
+        }
+
+        if (strcmp(ret_type_str, "unknown") == 0)
+        {
+            fprintf(out, "void* _lambda_%d(void* _ctx", node->lambda.lambda_id);
+        }
+        else
+        {
+            fprintf(out, "%s _lambda_%d(void* _ctx", ret_type_str, node->lambda.lambda_id);
+        }
+
+        if (node->type_info && node->type_info->inner &&
+            node->type_info->inner->kind != TYPE_UNKNOWN)
+        {
+            free(ret_type_str);
+        }
 
         for (int i = 0; i < node->lambda.num_params; i++)
         {
-            fprintf(out, ", %s %s", node->lambda.param_types[i], node->lambda.param_names[i]);
+            char *param_type_str = node->lambda.param_types[i];
+            if (node->type_info && node->type_info->args && node->type_info->args[i] &&
+                node->type_info->args[i]->kind != TYPE_UNKNOWN)
+            {
+                param_type_str = type_to_string(node->type_info->args[i]);
+            }
+            if (strcmp(param_type_str, "unknown") == 0)
+            {
+                fprintf(out, ", void* %s", node->lambda.param_names[i]);
+            }
+            else
+            {
+                fprintf(out, ", %s %s", param_type_str, node->lambda.param_names[i]);
+            }
+            if (node->type_info && node->type_info->args && node->type_info->args[i] &&
+                node->type_info->args[i]->kind != TYPE_UNKNOWN)
+            {
+                free(param_type_str);
+            }
         }
         fprintf(out, ") {\n");
 
@@ -553,30 +591,7 @@ void emit_trait_defs(ASTNode *node, FILE *out)
                     {
                         fprintf(out, ", ");
                     }
-                    char *args_safe = xstrdup(m->func.args);
-                    // TODO: better replace, but for now this works.
-                    char *p = strstr(args_safe, "Self");
-                    while (p)
-                    {
-                        // Check word boundary
-                        if ((p == args_safe || !isalnum(p[-1])) && !isalnum(p[4]))
-                        {
-                            int off = p - args_safe;
-                            char *new_s = xmalloc(strlen(args_safe) + 10);
-                            strncpy(new_s, args_safe, off);
-                            new_s[off] = 0;
-                            strcat(new_s, "void*");
-                            strcat(new_s, p + 4);
-                            free(args_safe);
-                            args_safe = new_s;
-                            p = strstr(args_safe + off + 5, "Self");
-                        }
-                        else
-                        {
-                            p = strstr(p + 1, "Self");
-                        }
-                    }
-
+                    char *args_safe = replace_type_str(m->func.args, "Self", "void*", NULL, NULL);
                     fprintf(out, "%s", args_safe);
                     free(args_safe);
                 }
@@ -605,29 +620,18 @@ void emit_trait_defs(ASTNode *node, FILE *out)
                         if (comma)
                         {
                             // Substitute Self -> TraitName in wrapper args
-                            char *args_sub = xstrdup(comma + 1);
-                            char *p = strstr(args_sub, "Self");
-                            while (p)
-                            {
-                                int off = p - args_sub;
-                                char *new_s =
-                                    xmalloc(strlen(args_sub) + strlen(node->trait.name) + 5);
-                                strncpy(new_s, args_sub, off);
-                                new_s[off] = 0;
-                                strcat(new_s, node->trait.name);
-                                strcat(new_s, p + 4);
-                                free(args_sub);
-                                args_sub = new_s;
-                                p = strstr(args_sub + off + strlen(node->trait.name), "Self");
-                            }
-
+                            char *args_sub =
+                                replace_type_str(comma + 1, "Self", node->trait.name, NULL, NULL);
                             fprintf(out, ", %s", args_sub);
                             free(args_sub);
                         }
                     }
                     else
                     {
-                        fprintf(out, ", %s", m->func.args); // TODO: recursive subst
+                        char *args_sub =
+                            replace_type_str(m->func.args, "Self", node->trait.name, NULL, NULL);
+                        fprintf(out, ", %s", args_sub);
+                        free(args_sub);
                     }
                 }
                 fprintf(out, ") {\n");
@@ -880,11 +884,6 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
                 continue;
             }
 
-            if (strcmp(f->impl_trait.trait_name, "Drop") == 0)
-            {
-                fprintf(out, "void %s__Drop_glue(%s *self);\n", sname, sname);
-            }
-
             ASTNode *m = f->impl_trait.methods;
             while (m)
             {
@@ -902,12 +901,6 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
                     fprintf(out, "%s %s(%s);\n", m->func.ret_type, m->func.name, m->func.args);
                 }
                 m = m->next;
-            }
-            // RAII: Emit glue prototype
-            if (strcmp(f->impl_trait.trait_name, "Drop") == 0)
-            {
-                char *tname = f->impl_trait.target_type;
-                fprintf(out, "void %s_Drop_glue(%s *self);\n", tname, tname);
             }
         }
         f = f->next;

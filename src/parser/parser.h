@@ -374,6 +374,12 @@ void register_type_usage(ParserContext *ctx, const char *name, Token t);
  */
 int validate_types(ParserContext *ctx);
 
+/**
+ * @brief Traverses all parsed structs and propagates `has_drop` from fields to their parent
+ * structs.
+ */
+void propagate_drop_traits(ParserContext *ctx);
+
 // Token helpers
 
 /**
@@ -600,8 +606,8 @@ ASTNode *parse_arrow_lambda_single(ParserContext *ctx, Lexer *l, char *param_nam
 /**
  * @brief Parses a multi-parameter arrow lambda.
  */
-ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_names, int num_params,
-                                  int default_capture_mode);
+ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_names,
+                                  Type **param_types, int num_params, int default_capture_mode);
 
 // Utils
 

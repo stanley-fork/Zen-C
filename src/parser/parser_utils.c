@@ -2820,6 +2820,35 @@ int check_impl(ParserContext *ctx, const char *trait, const char *strct)
         }
         r = r->next;
     }
+
+    char *base_strct = strdup(strct);
+    char *ptr = strchr(base_strct, '_');
+    if (ptr)
+    {
+        *ptr = 0;
+    }
+
+    r = ctx->registered_impls;
+    while (r)
+    {
+        char *base_reg = strdup(r->strct);
+        char *ptr2 = strchr(base_reg, '<');
+        if (ptr2)
+        {
+            *ptr2 = 0;
+        }
+
+        if (strcmp(r->trait, trait) == 0 && strcmp(base_reg, base_strct) == 0)
+        {
+            free(base_strct);
+            free(base_reg);
+            return 1;
+        }
+        free(base_reg);
+        r = r->next;
+    }
+    free(base_strct);
+
     return 0;
 }
 
@@ -3221,6 +3250,24 @@ void instantiate_generic(ParserContext *ctx, const char *tpl, const char *arg,
     }
 }
 
+static void free_field_list(ASTNode *fields)
+{
+    while (fields)
+    {
+        ASTNode *next = fields->next;
+        if (fields->field.name)
+        {
+            free(fields->field.name);
+        }
+        if (fields->field.type)
+        {
+            free(fields->field.type);
+        }
+        free(fields);
+        fields = next;
+    }
+}
+
 void instantiate_generic_multi(ParserContext *ctx, const char *tpl, char **args, int arg_count,
                                Token token)
 {
@@ -3289,22 +3336,19 @@ void instantiate_generic_multi(ParserContext *ctx, const char *tpl, char **args,
         ASTNode *fields = t->struct_node->strct.fields;
         int param_count = t->struct_node->strct.generic_param_count;
 
-        // Perform substitution for each param (simple approach: copy for first param, then replace
-        // in-place)
         if (param_count > 0 && arg_count > 0)
         {
             // First substitution
-
             i->strct.fields = copy_fields_replacing(
                 ctx, fields, t->struct_node->strct.generic_params[0], args[0]);
 
             // Subsequent substitutions (for params B, C, etc.)
             for (int j = 1; j < param_count && j < arg_count; j++)
             {
-
+                ASTNode *prev_fields = i->strct.fields;
                 ASTNode *tmp = copy_fields_replacing(
-                    ctx, i->strct.fields, t->struct_node->strct.generic_params[j], args[j]);
-                // This leaks prev fields, but that's acceptable for now, still, TODO.
+                    ctx, prev_fields, t->struct_node->strct.generic_params[j], args[j]);
+                free_field_list(prev_fields);
                 i->strct.fields = tmp;
             }
         }
@@ -4316,6 +4360,41 @@ int validate_types(ParserContext *ctx)
         u = u->next;
     }
     return errors == 0;
+}
+
+void propagate_drop_traits(ParserContext *ctx)
+{
+    int changed = 1;
+    while (changed)
+    {
+        changed = 0;
+        StructRef *ref = ctx->parsed_structs_list;
+        while (ref)
+        {
+            ASTNode *strct = ref->node;
+            if (strct && strct->type == NODE_STRUCT && strct->type_info &&
+                !strct->type_info->traits.has_drop)
+            {
+                ASTNode *field = strct->strct.fields;
+                while (field)
+                {
+                    Type *ft = field->type_info;
+                    if (ft && ft->kind == TYPE_STRUCT && ft->name)
+                    {
+                        ASTNode *fdef = find_struct_def(ctx, ft->name);
+                        if (fdef && fdef->type_info && fdef->type_info->traits.has_drop)
+                        {
+                            strct->type_info->traits.has_drop = 1;
+                            changed = 1;
+                            break;
+                        }
+                    }
+                    field = field->next;
+                }
+            }
+            ref = ref->next;
+        }
+    }
 }
 
 const char *normalize_type_name(const char *name)
