@@ -592,7 +592,8 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
             // Determine mechanism: struct/large-type? -> malloc; primitive -> cast
             int returns_struct = 0;
             char *rt = node->func.ret_type;
-            if (strcmp(rt, "void") != 0 && strcmp(rt, "Async") != 0)
+            if (strstr(rt, "*") == NULL && strcmp(rt, "string") != 0 &&
+                strcmp(rt, "void") != 0 && strcmp(rt, "Async") != 0)
             {
                 if (is_struct_return_type(rt))
                 {

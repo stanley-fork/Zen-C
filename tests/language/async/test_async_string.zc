@@ -1,0 +1,16 @@
+
+async fn fetch_string() -> string {
+    return "Hello, world!";
+}
+
+async fn fetch_charptr() -> char* {
+    return "Hello, world!";
+}
+
+test "async_returns_string" {
+    let result = await fetch_string();
+    assert(result == "Hello, world!", "failed to return string");
+
+    let result2 = await fetch_charptr();
+    assert(result2 == "Hello, world!", "failed to return char*");
+}

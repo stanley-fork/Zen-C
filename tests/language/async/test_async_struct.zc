@@ -1,0 +1,28 @@
+struct String {
+    data: char*;
+}
+
+struct StringOfString {
+    str: String;
+}
+
+async fn fetch_struct() -> String {
+    let str = String { data: malloc(sizeof(char) * 6) };
+    str.data = "Hello\0";
+    return str;
+}
+
+async fn fetch_struct2() -> StringOfString {
+    let str = await fetch_struct();
+    return StringOfString {
+        str: str
+    };
+}
+
+test "async_returns_string" {
+    let result = await fetch_struct();
+    assert(result.data == "Hello", "failed to return struct");
+
+    let result2 = await fetch_struct2();
+    assert(result2.str.data == "Hello", "failed to return struct of struct");
+}
