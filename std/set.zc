@@ -1,19 +1,6 @@
 
-import "./core.zc"
 import "./option.zc"
-
-// Pure Zen-C generic hash using FNV-1a algorithm
-fn _set_hash(data: const void*, len: usize) -> usize {
-    let hash = __zen_hash_seed;
-    let bytes: U8* = (U8*)data;
-    
-    for (let i: usize = 0; i < len; i = i + 1) {
-        hash = hash ^ (usize)bytes[i];
-        hash = hash * (usize)1099511628211;
-    }
-    
-    return hash;
-}
+import "./hash.zc"
 
 struct Set<T> {
     data: T*;
@@ -62,7 +49,7 @@ impl Set<T> {
             self._resize(new_cap);
         }
 
-        let hash = _set_hash(&val, sizeof(T));
+        let hash = hash_compute(&val, sizeof(T));
         let idx = hash % self.cap;
 
         while (self.occupied[idx] && !self.deleted[idx]) {
@@ -81,7 +68,7 @@ impl Set<T> {
             return false;
         }
 
-        let hash = _set_hash(&val, sizeof(T));
+        let hash = hash_compute(&val, sizeof(T));
         let idx = hash % self.cap;
         let start_idx = idx;
 
@@ -101,7 +88,7 @@ impl Set<T> {
     fn remove(self, val: T) -> bool {
         if (self.cap == 0) return false;
 
-        let hash = _set_hash(&val, sizeof(T));
+        let hash = hash_compute(&val, sizeof(T));
         let idx = hash % self.cap;
         let start_idx = idx;
 

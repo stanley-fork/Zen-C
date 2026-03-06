@@ -1,18 +1,18 @@
 
 import "./core.zc"
+import "./hash.zc"
 import "./option.zc"
 import "./mem.zc"
 
 // Pure Zen-C string hash using FNV-1a algorithm
 fn _map_hash_str(str: const char*) -> usize {
-    let hash = __zen_hash_seed;
+    let hash = hash_get_seed();
     let i: usize = 0;
     
     while (str[i] != 0) {
         // Cast char to U8 for unsigned byte value
         let b: U8 = (U8)str[i];
-        hash = hash ^ (usize)b;
-        hash = hash * (usize)1099511628211;
+        hash = hash_combine(hash, (usize)b);
         i = i + 1;
     }
     

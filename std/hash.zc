@@ -1,0 +1,35 @@
+let __zen_hash_seed: usize = 14695981039346656037;
+def _HASH_MAGIC: usize = 1099511628211;
+
+// Combine two hash values.
+@inline
+fn hash_combine(a: usize, b: usize) -> usize {
+    a = a ^ b;
+    a = a * _HASH_MAGIC;
+    return a;
+}
+
+// Compute the hash of the given pointer
+// Pure Zen-C generic hash using FNV-1a algorithm
+fn hash_compute(data: const void*, len: usize) -> usize {
+    let hash = __zen_hash_seed;
+    let bytes: U8* = (U8*)data;
+    
+    for (let i: usize = 0; i < len; i = i + 1) {
+        hash = hash_combine(hash, (usize)bytes[i]);
+    }
+    
+    return hash;
+}
+
+// Set a new seed for hashing algorithms
+// Example: hash_set_seed((usize)Time::now())
+fn hash_set_seed(seed: usize) {
+    __zen_hash_seed = seed;
+}
+
+// Get the seed for hashing algorithms
+@inline
+fn hash_get_seed() -> usize {
+    return __zen_hash_seed;
+}
