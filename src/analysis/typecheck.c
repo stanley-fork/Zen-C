@@ -133,6 +133,50 @@ static int get_asm_register_size(Type *t)
     return 32;
 }
 
+static int integer_type_width(Type *t)
+{
+    if (!t)
+    {
+        return 0;
+    }
+    switch (t->kind)
+    {
+    case TYPE_I8:
+    case TYPE_U8:
+    case TYPE_BYTE:
+    case TYPE_C_CHAR:
+    case TYPE_C_UCHAR:
+        return 8;
+    case TYPE_I16:
+    case TYPE_U16:
+    case TYPE_C_SHORT:
+    case TYPE_C_USHORT:
+        return 16;
+    case TYPE_I32:
+    case TYPE_U32:
+    case TYPE_INT:
+    case TYPE_UINT:
+    case TYPE_RUNE:
+    case TYPE_C_INT:
+    case TYPE_C_UINT:
+        return 32;
+    case TYPE_I64:
+    case TYPE_U64:
+    case TYPE_ISIZE:
+    case TYPE_USIZE:
+    case TYPE_C_LONG:
+    case TYPE_C_ULONG:
+    case TYPE_C_LONG_LONG:
+    case TYPE_C_ULONG_LONG:
+        return 64;
+    case TYPE_I128:
+    case TYPE_U128:
+        return 128;
+    default:
+        return 0;
+    }
+}
+
 // ** Node Checkers **
 
 static void check_node(TypeChecker *tc, ASTNode *node);
@@ -164,21 +208,18 @@ static void check_move_for_rvalue(TypeChecker *tc, ASTNode *rvalue)
         const char *hints[] = {"This type owns resources and cannot be implicitly copied",
                                "Consider borrowing value via references or implementing Copy",
                                NULL};
-        zerror_with_hints(rvalue->token, "Cannot move out of a borrowed reference", hints);
-        tc->error_count++;
+        tc_error_with_hints(tc, rvalue->token, "Cannot move out of a borrowed reference", hints);
     }
     else if (rvalue->type == NODE_EXPR_MEMBER)
     {
         const char *hints[] = {
             "Cannot move a field out of a struct. Consider cloning or borrowing.", NULL};
-        zerror_with_hints(rvalue->token, "Cannot move out of a struct field", hints);
-        tc->error_count++;
+        tc_error_with_hints(tc, rvalue->token, "Cannot move out of a struct field", hints);
     }
     else if (rvalue->type == NODE_EXPR_INDEX)
     {
         const char *hints[] = {"Cannot move an element out of an array or slice.", NULL};
-        zerror_with_hints(rvalue->token, "Cannot move out of an index expression", hints);
-        tc->error_count++;
+        tc_error_with_hints(tc, rvalue->token, "Cannot move out of an index expression", hints);
     }
 }
 
@@ -665,6 +706,12 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node)
         arg = arg->next;
         arg_idx++;
     }
+
+    // Propagate return type from function signature
+    if (sig && sig->ret_type && !node->type_info)
+    {
+        node->type_info = sig->ret_type;
+    }
 }
 
 static void check_block(TypeChecker *tc, ASTNode *block)
@@ -763,6 +810,25 @@ static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, 
     // Integer compatibility (promotion/demotion)
     if (is_integer_type(resolved_target) && is_integer_type(resolved_value))
     {
+        // Warn on narrowing conversions
+        int target_width = integer_type_width(resolved_target);
+        int value_width = integer_type_width(resolved_value);
+        if (target_width > 0 && value_width > 0 && target_width < value_width)
+        {
+            char *t_str = type_to_string(target);
+            char *v_str = type_to_string(value);
+            char msg[256];
+            snprintf(msg, sizeof(msg),
+                     "Implicit narrowing conversion from '%s' (%d-bit) to '%s' (%d-bit)", v_str,
+                     value_width, t_str, target_width);
+            zwarn_at(t, "%s", msg);
+            if (tc)
+            {
+                tc->warning_count++;
+            }
+            free(t_str);
+            free(v_str);
+        }
         return 1;
     }
 
@@ -827,15 +893,8 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node)
             check_type_compatibility(tc, decl_type, init_type, node->token);
         }
 
-        // Move Analysis: If initializing from another variable, it moves.
-        if (node->var_decl.init_expr->type == NODE_EXPR_VAR)
-        {
-            ZenSymbol *init_sym = tc_lookup(tc, node->var_decl.init_expr->var_ref.name);
-            if (init_sym)
-            {
-                mark_symbol_moved(tc->pctx, init_sym, node);
-            }
-        }
+        // Move Analysis: Check if the initializer moves a non-copy value.
+        check_move_for_rvalue(tc, node->var_decl.init_expr);
     }
 
     // If type is not explicit, we should ideally infer it from init_expr.
@@ -945,7 +1004,9 @@ static void check_function(TypeChecker *tc, ASTNode *node)
     {
         if (node->func.param_names && node->func.param_names[i])
         {
-            tc_add_symbol(tc, node->func.param_names[i], NULL, (Token){0});
+            Type *param_type =
+                (node->func.arg_types && node->func.arg_types[i]) ? node->func.arg_types[i] : NULL;
+            tc_add_symbol(tc, node->func.param_names[i], param_type, node->token);
         }
     }
 
@@ -1071,17 +1132,39 @@ static void check_struct_init(TypeChecker *tc, ASTNode *node)
                                      field_init->token);
         }
 
-        // Move Analysis: If initializing from another variable, it moves.
-        if (field_init->var_decl.init_expr->type == NODE_EXPR_VAR)
-        {
-            ZenSymbol *init_sym = tc_lookup(tc, field_init->var_decl.init_expr->var_ref.name);
-            if (init_sym)
-            {
-                mark_symbol_moved(tc->pctx, init_sym, node);
-            }
-        }
+        // Move Analysis: Check if the initializer moves a non-copy value.
+        check_move_for_rvalue(tc, field_init->var_decl.init_expr);
 
         field_init = field_init->next;
+    }
+
+    // Check for missing required fields
+    ASTNode *def_field = def->strct.fields;
+    while (def_field)
+    {
+        if (def_field->type == NODE_FIELD && def_field->field.name)
+        {
+            int provided = 0;
+            ASTNode *fi = node->struct_init.fields;
+            while (fi)
+            {
+                if (fi->var_decl.name && strcmp(fi->var_decl.name, def_field->field.name) == 0)
+                {
+                    provided = 1;
+                    break;
+                }
+                fi = fi->next;
+            }
+            if (!provided)
+            {
+                char msg[256];
+                snprintf(msg, sizeof(msg), "Missing field '%s' in initializer for struct '%s'",
+                         def_field->field.name, node->struct_init.struct_name);
+                const char *hints[] = {"All struct fields must be initialized", NULL};
+                tc_error_with_hints(tc, node->token, msg, hints);
+            }
+        }
+        def_field = def_field->next;
     }
 
     node->type_info = def->type_info;
@@ -1611,6 +1694,43 @@ static void check_node(TypeChecker *tc, ASTNode *node)
             check_node(tc, node->size_of.expr);
         }
         node->type_info = type_new(TYPE_I32);
+        break;
+    case NODE_FOR_RANGE:
+        // Check range start/end expressions
+        check_node(tc, node->for_range.start);
+        check_node(tc, node->for_range.end);
+        check_node(tc, node->for_range.body);
+        break;
+    case NODE_EXPR_SLICE:
+        // Check slice target and indices
+        check_node(tc, node->slice.array);
+        check_node(tc, node->slice.start);
+        check_node(tc, node->slice.end);
+        break;
+    case NODE_DESTRUCT_VAR:
+        if (node->destruct.init_expr)
+        {
+            check_node(tc, node->destruct.init_expr);
+        }
+        break;
+    case NODE_DO_WHILE:
+        check_node(tc, node->do_while_stmt.body);
+        check_node(tc, node->do_while_stmt.condition);
+        if (node->do_while_stmt.condition && node->do_while_stmt.condition->type_info)
+        {
+            Type *cond_type = resolve_alias(node->do_while_stmt.condition->type_info);
+            if (cond_type->kind != TYPE_BOOL && !is_integer_type(cond_type) &&
+                cond_type->kind != TYPE_POINTER && cond_type->kind != TYPE_STRING)
+            {
+                const char *hints[] = {"Do-while conditions must be boolean, integer, or pointer",
+                                       NULL};
+                tc_error_with_hints(tc, node->do_while_stmt.condition->token,
+                                    "Condition must be a truthy type", hints);
+            }
+        }
+        break;
+    case NODE_GOTO:
+    case NODE_LABEL:
         break;
     default:
         // Generic recursion for lists and other nodes.

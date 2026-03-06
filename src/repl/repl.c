@@ -1304,7 +1304,7 @@ void run_repl(const char *self_path)
                         show_code_size += strlen(history[i]) + 2;
                     }
                     char *show_code = malloc(show_code_size);
-                    snprintf(show_code, show_code_size, "");
+                    show_code[0] = '\0';
                     for (int i = 0; i < history_len; i++)
                     {
                         strcat(show_code, history[i]);
@@ -2084,7 +2084,7 @@ void run_repl(const char *self_path)
                         continue;
                     }
                     char *expr_buf = malloc(8192);
-                    snprintf(expr_buf, sizeof(expr_buf), "%s", cmd_buf + 3);
+                    snprintf(expr_buf, 8192, "%s", cmd_buf + 3);
 
                     int cmd_brace_depth = 0;
                     for (char *p = expr_buf; *p; p++)
@@ -2364,7 +2364,7 @@ void run_repl(const char *self_path)
                 char *last_line = history[history_len - 1];
 
                 char *check_buf = malloc(strlen(last_line) + 2);
-                snprintf(check_buf, sizeof(check_buf), "%s", last_line);
+                snprintf(check_buf, strlen(last_line) + 2, "%s", last_line);
                 strcat(check_buf, ";");
 
                 ParserContext ctx = {0};
