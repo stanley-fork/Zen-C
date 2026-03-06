@@ -52,9 +52,14 @@ make test
 ```
 
 ### Run Specific Test
-To run a single test file to save time during development:
+To run a single test file to save time during development, you can either run it directly:
 ```bash
-./zc run tests/test_match.zc
+./zc run tests/language/control_flow/test_match.zc
+```
+
+Or you can run the test suite selectively:
+```bash
+make test only="tests/language/control_flow/test_match.zc"
 ```
 
 ### Test with Different Backends
