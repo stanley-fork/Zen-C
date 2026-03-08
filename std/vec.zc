@@ -175,11 +175,13 @@ impl Vec<T> {
         return item;
     }
 
-    fn append(self, other: Vec<T>) {
-        let new_len = self.len + other.len;
+    // Appends all elements from another vector.
+    // Takes a pointer to avoid moving/consuming the other vector.
+    fn append(self, other: Vec<T>*) {
+        let new_len = self.len + (*other).len;
         self.grow_to_fit(new_len);
 
-        memcpy(self.data + self.len, other.data, other.len * sizeof(T));
+        memcpy(self.data + self.len, (*other).data, (*other).len * sizeof(T));
         self.len = new_len;
     }
 
@@ -267,14 +269,19 @@ impl Vec<T> {
         }
     }
     
-    fn eq(self, other: Vec<T>) -> bool {
-        if self.len != other.len { return false; }
-        let i: usize = 0;
-        while i < self.len {
-            if memcmp(&self.data[i], &other.data[i], sizeof(T)) != 0 { return false; }
-            i = i + 1;
+    // Structural equality check.
+    // Returns true if both vectors have the same length and identical elements.
+    fn eq(self, other: Vec<T>*) -> bool {
+        let result = true;
+        if self.len != (*other).len { result = false; }
+        else {
+            let i: usize = 0;
+            while i < self.len {
+                if memcmp(&self.data[i], &(*other).data[i], sizeof(T)) != 0 { result = false; break; }
+                i = i + 1;
+            }
         }
-        return true;
+        return result;
     }
 
     // Prevent Drop from freeing memory (simulates move)
@@ -284,6 +291,72 @@ impl Vec<T> {
         self.cap = 0;
     }
 
+    // Operator overload for `+` (Concatenation)
+    // Returns a new vector containing elements from both v1 and v2.
+    // Usage: let v3 = v1 + &v2;
+    fn add(self, other: Vec<T>*) -> Vec<T> {
+        let result = self.clone();
+        result.append(other);
+        return result;
+    }
+
+    // Operator overload for `+=` (In-place concatenation)
+    fn add_assign(self, other: Vec<T>*) {
+        self.append(other);
+    }
+    // Operator overload for `!=` (Inequality)
+    fn neq(self, other: Vec<T>*) -> bool {
+        let result = !self.eq(other);
+        return result;
+    }
+
+    // Operator overload for `<<` (Push item into vector)
+    fn shl(self, item: T) {
+        self.push(item);
+    }
+
+    // Operator overload for `>>` (Pop item from vector into pointer)
+    fn shr(self, out_item: T*) {
+        if (out_item != 0) {
+            *out_item = self.pop();
+        } else {
+            self.pop();
+        }
+    }
+
+    // Operator overload for `*` (Repeat vector N times)
+    // Returns a new vector with elements repeated `count` times.
+    // Usage: let v2 = v * 3;
+    fn mul(self, count: usize) -> Vec<T> {
+        let result = Vec<T>::with_capacity(self.len * count);
+        let c: usize = 0;
+        while c < count {
+            result.append(self);
+            c += 1;
+        }
+        return result;
+    }
+
+    // Operator overload for `*=` (In-place repeat)
+    // Repeats the current elements in-place `count` times.
+    // Usage: v *= 3;
+    fn mul_assign(self, count: usize) {
+        if (count == 0) {
+            self.clear();
+            return;
+        }
+        if (count == 1) {
+            return;
+        }
+        let original_len = self.len;
+        self.grow_to_fit(self.len * count);
+        let c: usize = 1;
+        while c < count {
+            memcpy(self.data + (original_len * c), self.data, original_len * sizeof(T));
+            self.len += original_len;
+            c += 1;
+        }
+    }
 
 
     fn clone(self) -> Vec<T> {
