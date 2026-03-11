@@ -797,14 +797,25 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                 int has_drop = 0;
                 char *drop_type_name = NULL;
 
-                if (arg_type->kind == TYPE_STRUCT && arg_type->name)
+                if (arg_type->kind == TYPE_FUNCTION ||
+                    (arg_type->kind == TYPE_STRUCT && arg_type->name))
                 {
-                    ASTNode *def = find_struct_def(ctx, arg_type->name);
-                    if (def && def->type == NODE_STRUCT && def->type_info &&
-                        def->type_info->traits.has_drop)
+                    if (arg_type->kind == TYPE_FUNCTION)
                     {
-                        has_drop = 1;
-                        drop_type_name = arg_type->name;
+                        if (arg_type->traits.has_drop)
+                        {
+                            has_drop = 1;
+                        }
+                    }
+                    else
+                    {
+                        ASTNode *def = find_struct_def(ctx, arg_type->name);
+                        if (def && def->type == NODE_STRUCT && def->type_info &&
+                            def->type_info->traits.has_drop)
+                        {
+                            has_drop = 1;
+                            drop_type_name = arg_type->name;
+                        }
                     }
                 }
 
@@ -814,9 +825,19 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
 
                     ASTNode *defer_node = xmalloc(sizeof(ASTNode));
                     defer_node->type = NODE_RAW_STMT;
-                    char *stmt_str = xmalloc(256 + strlen(arg_name) * 2 + strlen(drop_type_name));
-                    sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop_glue(&%s);", arg_name,
-                            drop_type_name, arg_name);
+                    char *stmt_str = NULL;
+                    if (arg_type->kind == TYPE_FUNCTION)
+                    {
+                        stmt_str = xmalloc(256 + strlen(arg_name) * 2);
+                        sprintf(stmt_str, "if (__z_drop_flag_%s && %s.drop) %s.drop(%s.ctx);",
+                                arg_name, arg_name, arg_name, arg_name);
+                    }
+                    else
+                    {
+                        stmt_str = xmalloc(256 + strlen(arg_name) * 2 + strlen(drop_type_name));
+                        sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop_glue(&%s);", arg_name,
+                                drop_type_name, arg_name);
+                    }
                     defer_node->raw_stmt.content = stmt_str;
 
                     if (defer_count < MAX_DEFER)
@@ -1137,10 +1158,28 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                         ASTNode *defer_node = xmalloc(sizeof(ASTNode));
                         defer_node->type = NODE_RAW_STMT;
                         // Build string
-                        char *stmt_str =
-                            xmalloc(256 + strlen(node->var_decl.name) * 2 + strlen(clean_type));
-                        sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop_glue(&%s);",
-                                node->var_decl.name, clean_type, node->var_decl.name);
+                        char *stmt_str = NULL;
+                        if (node->var_decl.init_expr && node->var_decl.init_expr->type_info &&
+                            node->var_decl.init_expr->type_info->kind == TYPE_FUNCTION)
+                        {
+                            stmt_str = xmalloc(256 + strlen(node->var_decl.name) * 2);
+                            sprintf(stmt_str, "if (__z_drop_flag_%s && %s.drop) %s.drop(%s.ctx);",
+                                    node->var_decl.name, node->var_decl.name, node->var_decl.name,
+                                    node->var_decl.name);
+                        }
+                        else
+                        {
+                            char *clean_name = xstrdup(clean_type);
+                            if (strncmp(clean_name, "struct ", 7) == 0)
+                            {
+                                memmove(clean_name, clean_name + 7, strlen(clean_name) - 6);
+                            }
+                            stmt_str =
+                                xmalloc(256 + strlen(node->var_decl.name) * 2 + strlen(clean_name));
+                            sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop_glue(&%s);",
+                                    node->var_decl.name, clean_name, node->var_decl.name);
+                            free(clean_name);
+                        }
                         defer_node->raw_stmt.content = stmt_str;
                         defer_node->line = node->line;
 

@@ -92,15 +92,15 @@ typedef struct Type
     int is_explicit_struct; ///< 1 if defined with "struct" keyword explicitly.
     int is_raw;             // Raw function pointer (fn*)
     int array_size;         ///< Size for fixed-size arrays. For TYPE_BITINT, this is the bit width.
+    struct
+    {
+        int has_drop;     ///< 1 if type implements Drop trait (RAII).
+        int has_iterable; ///< 1 if type implements Iterable trait.
+    } traits;
     union
     {
         int is_varargs;  ///< 1 if function type is variadic.
         int is_restrict; ///< 1 if pointer is restrict-qualified.
-        struct
-        {
-            int has_drop;     ///< 1 if type implements Drop trait (RAII).
-            int has_iterable; ///< 1 if type implements Iterable trait.
-        } traits;
         struct
         {
             int is_opaque_alias;

@@ -192,6 +192,11 @@ int is_type_copy(ParserContext *ctx, Type *t)
     case TYPE_VOID:
     case TYPE_POINTER:
     case TYPE_FUNCTION:
+        if (t->traits.has_drop && !t->is_raw)
+        {
+            return 0;
+        }
+        return 1;
     case TYPE_ENUM:
     case TYPE_BITINT:
     case TYPE_UBITINT:

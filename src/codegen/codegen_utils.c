@@ -939,7 +939,32 @@ int emit_move_invalidation(ParserContext *ctx, ASTNode *node, FILE *out)
         def = find_struct_def(ctx, clean_type);
     }
 
-    if (def && def->type_info && def->type_info->traits.has_drop)
+    Type *t = node->type_info;
+    int has_drop = 0;
+    if (t)
+    {
+        if (t->kind == TYPE_FUNCTION)
+        {
+            has_drop = t->traits.has_drop && !t->is_raw;
+        }
+        else if (t->kind == TYPE_STRUCT || t->kind == TYPE_ENUM)
+        {
+            if (def && def->type_info)
+            {
+                has_drop = def->type_info->traits.has_drop;
+            }
+            else
+            {
+                has_drop = t->traits.has_drop;
+            }
+        }
+    }
+    else if (def && def->type_info)
+    {
+        has_drop = def->type_info->traits.has_drop;
+    }
+
+    if (has_drop)
     {
         if (node->type == NODE_EXPR_VAR)
         {
@@ -979,7 +1004,32 @@ void codegen_expression_with_move(ParserContext *ctx, ASTNode *node, FILE *out)
             def = find_struct_def(ctx, clean_type);
         }
 
-        if (def && def->type_info && def->type_info->traits.has_drop)
+        Type *t = node->type_info;
+        int has_drop = 0;
+        if (t)
+        {
+            if (t->kind == TYPE_FUNCTION)
+            {
+                has_drop = t->traits.has_drop && !t->is_raw;
+            }
+            else if (t->kind == TYPE_STRUCT || t->kind == TYPE_ENUM)
+            {
+                if (def && def->type_info)
+                {
+                    has_drop = def->type_info->traits.has_drop;
+                }
+                else
+                {
+                    has_drop = t->traits.has_drop;
+                }
+            }
+        }
+        else if (def && def->type_info)
+        {
+            has_drop = def->type_info->traits.has_drop;
+        }
+
+        if (has_drop)
         {
             fprintf(out, "({ __typeof__(");
             codegen_expression(ctx, node, out);

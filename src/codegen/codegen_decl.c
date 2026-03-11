@@ -68,7 +68,7 @@ static void emit_freestanding_preamble(FILE *out)
           "#define _z_arg(x) _Generic((x), _Bool: _z_bool_str(_z_safe_bool(x)) _z_128_arg_map(x), "
           "default: (x))\n",
           out);
-    fputs("typedef struct { void *func; void *ctx; } z_closure_T;\n", out);
+    fputs("typedef struct { void *func; void *ctx; void (*drop)(void*); } z_closure_T;\n", out);
     fputs("static void *_z_closure_ctx_stash[256];\n", out);
 
     // In true freestanding, explicit definitions of z_malloc/etc are removed.
@@ -148,7 +148,7 @@ void emit_preamble(ParserContext *ctx, FILE *out)
             fputs("#include <pthread.h>\n", out);
             fputs("typedef struct { pthread_t thread; void *result; } Async;\n", out);
         }
-        fputs("typedef struct { void *func; void *ctx; } z_closure_T;\n", out);
+        fputs("typedef struct { void *func; void *ctx; void (*drop)(void*); } z_closure_T;\n", out);
         fputs("static void *_z_closure_ctx_stash[256];\n", out);
         fputs("typedef void U0;\ntypedef int8_t I8;\ntypedef uint8_t U8;\ntypedef "
               "int16_t I16;\ntypedef uint16_t U16;\n",
@@ -376,7 +376,35 @@ void emit_lambda_defs(ParserContext *ctx, FILE *out)
                             node->lambda.captured_vars[i]);
                 }
             }
-            fprintf(out, "};\n");
+            fprintf(out, "};\n\n");
+
+            // Generate Drop function for the closure context
+            fprintf(out, "static void _lambda_%d_drop(void* _ctx) {\n", node->lambda.lambda_id);
+            fprintf(out, "    struct Lambda_%d_Ctx* ctx = (struct Lambda_%d_Ctx*)_ctx;\n",
+                    node->lambda.lambda_id, node->lambda.lambda_id);
+
+            for (int i = 0; i < node->lambda.num_captures; i++)
+            {
+                if (node->lambda.capture_modes && node->lambda.capture_modes[i] == 0)
+                {
+                    char *tname = node->lambda.captured_types[i];
+                    const char *clean = tname;
+                    if (strncmp(clean, "struct ", 7) == 0)
+                    {
+                        clean += 7;
+                    }
+
+                    ASTNode *fdef = find_struct_def_codegen(ctx, clean);
+                    if (fdef && fdef->type_info && fdef->type_info->traits.has_drop)
+                    {
+                        fprintf(out, "    %s__Drop_glue(&ctx->%s);\n", clean,
+                                node->lambda.captured_vars[i]);
+                    }
+                }
+            }
+
+            fprintf(out, "    free(_ctx);\n");
+            fprintf(out, "}\n\n");
         }
 
         char *ret_type_str = node->lambda.return_type;

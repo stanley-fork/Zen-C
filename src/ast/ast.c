@@ -60,6 +60,10 @@ Type *type_new(TypeKind kind)
     Type *t = xmalloc(sizeof(Type));
     memset(t, 0, sizeof(Type));
     t->kind = kind;
+    if (kind == TYPE_FUNCTION)
+    {
+        t->traits.has_drop = 1;
+    }
     t->name = NULL;
     t->inner = NULL;
     t->args = NULL;

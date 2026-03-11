@@ -247,24 +247,27 @@ static void codegen_lambda_expr(ParserContext *ctx, ASTNode *node, FILE *out)
         }
         if (g_config.use_cpp)
         {
-            fprintf(out, "_z_closure_ctx_stash[%d] = _z_ctx_%d;\n", lid, lid);
-            fprintf(out, "z_closure_T _cl = {(void*)_lambda_%d, _z_ctx_%d}; _cl; })", lid, lid);
+            fprintf(out,
+                    "z_closure_T _cl = {(void*)_lambda_%d, _z_ctx_%d, _lambda_%d_drop}; _cl; })",
+                    lid, lid, lid);
         }
         else
         {
-            fprintf(out, "_z_closure_ctx_stash[%d] = _z_ctx_%d;\n", lid, lid);
-            fprintf(out, "(z_closure_T){.func = _lambda_%d, .ctx = _z_ctx_%d}; })", lid, lid);
+            fprintf(
+                out,
+                "(z_closure_T){.func = _lambda_%d, .ctx = _z_ctx_%d, .drop = _lambda_%d_drop}; })",
+                lid, lid, lid);
         }
     }
     else
     {
         if (g_config.use_cpp)
         {
-            fprintf(out, "(z_closure_T){ (void*)_lambda_%d, NULL }", node->lambda.lambda_id);
+            fprintf(out, "(z_closure_T){ (void*)_lambda_%d, NULL, NULL }", node->lambda.lambda_id);
         }
         else
         {
-            fprintf(out, "((z_closure_T){.func = (void*)_lambda_%d, .ctx = NULL})",
+            fprintf(out, "((z_closure_T){.func = (void*)_lambda_%d, .ctx = NULL, .drop = NULL})",
                     node->lambda.lambda_id);
         }
     }

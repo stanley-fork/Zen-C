@@ -21,13 +21,11 @@ raw {
     };
     
     static void* _z_thread_trampoline(void *arg) {
-        struct ZenThreadCtx *c = (struct ZenThreadCtx*)arg;
-        z_closure_T *closure = (z_closure_T*)c;
+        z_closure_T *closure = (z_closure_T*)arg;
         void (*f)(void*) = (void(*)(void*))closure->func;
-        void *ctx_to_free = closure->ctx;
         f(closure->ctx);
-        if (ctx_to_free) free(ctx_to_free);
-        free(c);
+        if (closure->drop) closure->drop(closure->ctx);
+        free(closure);
         return NULL;
     }
 
@@ -105,10 +103,15 @@ impl Thread {
     fn spawn(func: fn()) -> Result<Thread> {
         let out_handle: usize = 0; 
         
-        let ctx = malloc(16); // z_closure_T is 16 bytes
+        let ctx = malloc(sizeof(fn())); 
         if (ctx == NULL) return Result<Thread>::Err("OOM");
         
-        memcpy(ctx, &func, 16);
+        memcpy(ctx, &func, sizeof(fn()));
+        
+        // Zero out the drop field to prevent double-free by this function's cleanup
+        raw {
+            ((z_closure_T*)&func)->drop = NULL;
+        }
 
         let ret = _z_thread_spawn(ctx, &out_handle);
         
