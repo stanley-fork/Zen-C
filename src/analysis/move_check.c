@@ -264,20 +264,19 @@ void check_use_validity(TypeChecker *tc, ASTNode *var_node, ZenSymbol *sym)
 
     if (status == MOVE_STATE_MOVED || status == MOVE_STATE_MAYBE_MOVED)
     {
-        // Skip compiler-generated nodes with no source location (e.g. println interpolation)
-        if (var_node->token.line == 0)
+        if (tc && tc->in_loop_pass2)
         {
-            return;
-        }
-
-        // Suppress duplicate errors in pass 2 if it was already moved *before* the loop started.
-        // We only care about new moves inside the loop on pass 2.
-        if (tc && tc->in_loop_pass2 && tc->loop_start_state)
-        {
-            MoveStatus start_status = get_move_status(tc->loop_start_state, sym->name);
-            if (start_status == MOVE_STATE_MOVED || start_status == MOVE_STATE_MAYBE_MOVED)
+            if (var_node->token.line == 0)
             {
                 return;
+            }
+            if (tc->loop_start_state)
+            {
+                MoveStatus start_status = get_move_status(tc->loop_start_state, sym->name);
+                if (start_status == MOVE_STATE_MOVED || start_status == MOVE_STATE_MAYBE_MOVED)
+                {
+                    return;
+                }
             }
         }
 
