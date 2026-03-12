@@ -977,13 +977,9 @@ ASTNode *parse_return(ParserContext *ctx, Lexer *l);
 /**
  * @brief Processes a formatted string.
  */
+char *escape_c_string(const char *input);
 char *process_printf_sugar(ParserContext *ctx, const char *content, int newline, const char *target,
                            char ***used_syms, int *count, int check_symbols);
-
-/**
- * @brief Escapes a C string.
- */
-char *escape_c_string(const char *input);
 
 /**
  * @brief Parses an assert statement.

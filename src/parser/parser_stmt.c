@@ -1745,53 +1745,6 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
     return n;
 }
 
-static char *escape_c_string(const char *input)
-{
-    char *out = xmalloc(strlen(input) * 2 + 1);
-    char *p = out;
-    while (*input)
-    {
-        if (*input == '\\')
-        {
-            *p++ = *input++;
-            if (*input)
-            {
-                *p++ = *input++;
-            }
-        }
-        else if (*input == '\n')
-        {
-            *p++ = '\\';
-            *p++ = 'n';
-            input++;
-        }
-        else if (*input == '\r')
-        {
-            *p++ = '\\';
-            *p++ = 'r';
-            input++;
-        }
-        else if (*input == '\t')
-        {
-            *p++ = '\\';
-            *p++ = 't';
-            input++;
-        }
-        else if (*input == '"')
-        {
-            *p++ = '\\';
-            *p++ = '"';
-            input++;
-        }
-        else
-        {
-            *p++ = *input++;
-        }
-    }
-    *p = '\0';
-    return out;
-}
-
 char *process_printf_sugar(ParserContext *ctx, const char *content, int newline, const char *target,
                            char ***used_syms, int *count, int check_symbols)
 {
