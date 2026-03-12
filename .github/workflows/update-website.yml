@@ -9,7 +9,7 @@ jobs:
   update-website:
     runs-on: ubuntu-latest
     steps:
-      - name: 🏷️ Get the new version tag
+      - name: Get the new version tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
