@@ -12,7 +12,7 @@ def fetch_json(url):
         return json.loads(response.read().decode())
 
 def main():
-    print("Fetching tasks from Rosetta Code...")
+    print("-> Fetching tasks from Rosetta Code...")
     
     url = f"{API_URL}?action=query&list=categorymembers&cmtitle={CATEGORY}&cmlimit=500&format=json"
     data = fetch_json(url)
@@ -29,32 +29,41 @@ def main():
         content_data = fetch_json(content_url)
         text = content_data['query']['pages'][str(pageid)]['revisions'][0]['slots']['main']['*']
 
-        match = re.search(r'==\{\{header\|Zen[ _-]?C\}\}==\n.*?(?:<lang[^>]*>|<highlight[^>]*>)(.*?)(?:</lang>|</highlight>)', text, re.DOTALL | re.IGNORECASE)
+        parts = re.split(r'==\{\{header\|Zen[ _-]?C\}\}==', text, flags=re.IGNORECASE)
         
-        if match:
-            code = match.group(1).strip()
-            safe_title = title.replace("/", "_").replace(" ", "_")
-            page_url = f"https://rosettacode.org/wiki/{title.replace(' ', '_')}"
-            history_url = f"{page_url}?action=history"
+        if len(parts) > 1:
+            zen_c_section = parts[1].split('=={{header|')[0]
             
-            zc_filename = f"examples/rosetta/{safe_title}.zc"
-            with open(zc_filename, "w", encoding="utf-8") as f:
-                f.write(code + "\n")
+            match = re.search(r'(?:<lang[^>]*>|<syntaxhighlight[^>]*>|<highlight[^>]*>)(.*?)(?:</lang>|</syntaxhighlight>|</highlight>)', zen_c_section, re.DOTALL | re.IGNORECASE)
+            
+            if match:
+                code = match.group(1).strip()
+                safe_title = title.replace("/", "_").replace(" ", "_")
+                page_url = f"https://rosettacode.org/wiki/{title.replace(' ', '_')}"
+                history_url = f"{page_url}?action=history"
                 
-            md_filename = f"website_out/{safe_title}.md"
-            with open(md_filename, "w", encoding="utf-8") as f:
-                f.write("+++\n")
-                f.write(f'title = "{title}"\n')
-                f.write("+++\n\n")
-                f.write(f"# {title}\n\n")
-                f.write("```zc\n")
-                f.write(code + "\n")
-                f.write("```\n\n")
-                f.write("---\n")
-                f.write(f"**Attribution:** This is a community solution for the Rosetta Code task [**{title}**]({page_url}) in Zen C.\n\n")
-                f.write(f"*This article uses material from the Rosetta Code article **{title}**, which is released under the [GNU Free Documentation License 1.3](https://www.gnu.org/licenses/fdl-1.3.html). A list of the original authors can be found in the [page history]({history_url}).*\n")
-            
-            print(f"Scraped: {title} (with GFDL attribution)")
+                zc_filename = f"examples/rosetta/{safe_title}.zc"
+                with open(zc_filename, "w", encoding="utf-8") as f:
+                    f.write(code + "\n")
+                    
+                md_filename = f"website_out/{safe_title}.md"
+                with open(md_filename, "w", encoding="utf-8") as f:
+                    f.write("+++\n")
+                    f.write(f'title = "{title}"\n')
+                    f.write("+++\n\n")
+                    f.write(f"# {title}\n\n")
+                    f.write("```zc\n")
+                    f.write(code + "\n")
+                    f.write("```\n\n")
+                    f.write("---\n")
+                    f.write(f"**Attribution:** This is a community solution for the Rosetta Code task [**{title}**]({page_url}) in Zen C.\n\n")
+                    f.write(f"*This article uses material from the Rosetta Code article **{title}**, which is released under the [GNU Free Documentation License 1.3](https://www.gnu.org/licenses/fdl-1.3.html). A list of the original authors can be found in the [page history]({history_url}).*\n")
+                
+                print(f"-> Scraped: {title}")
+            else:
+                print(f"-> Found header, but NO code block in: {title}")
+        else:
+            print(f"-> Could not find Zen C header in: {title}")
 
 if __name__ == "__main__":
     main()
