@@ -1348,6 +1348,7 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
         codegen_node_single(ctx, node->if_stmt.then_body, out);
         if (node->if_stmt.else_body)
         {
+            emit_source_mapping(node->if_stmt.else_body, out);
             fprintf(out, " else ");
             codegen_node_single(ctx, node->if_stmt.else_body, out);
         }
