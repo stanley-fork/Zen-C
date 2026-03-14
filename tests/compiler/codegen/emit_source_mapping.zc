@@ -1,4 +1,4 @@
-import "emit_source_mapping_import.zc"
+import "_emit_source_mapping_import.zc"
 
 struct Log {
     // Empty.
