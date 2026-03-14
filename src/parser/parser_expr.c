@@ -5257,7 +5257,8 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 newline = 0;
             }
 
-            char *code = process_printf_sugar(ctx, lexer_peek(l), inner, newline, "stderr", NULL, NULL, 1);
+            char *code =
+                process_printf_sugar(ctx, lexer_peek(l), inner, newline, "stderr", NULL, NULL, 1);
             free(inner);
 
             ASTNode *n = ast_create(NODE_RAW_STMT);

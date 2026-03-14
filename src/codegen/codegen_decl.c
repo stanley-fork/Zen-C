@@ -1602,16 +1602,13 @@ void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes)
 }
 
 static int last_source_mapping_line = -1;
-static int last_source_mapping_type = -1;
+static NodeType last_source_mapping_type = NODE_ROOT;
 static int allow_duplicate_source_mapping = 0;
 
 int should_emit_source_mapping(ASTNode *node)
 {
-    return node
-        && node->type < NODE_REPL_PRINT
-        && node->type != NODE_BLOCK
-        && node->type != NODE_EXPR_UNARY
-        && node->type != NODE_FIELD;
+    return node && node->type < NODE_REPL_PRINT && node->type != NODE_BLOCK &&
+           node->type != NODE_EXPR_UNARY && node->type != NODE_FIELD;
 }
 
 void emit_source_mapping_duplicate(ASTNode *node, FILE *out)
@@ -1643,7 +1640,9 @@ void emit_source_mapping(ASTNode *node, FILE *out)
 
     if (!node->token.start || !node->token.file)
     {
-        zwarn_at(node->token, "Encountered source mapping issue for node type %i, please report this issue.", node->type);
+        zwarn_at(node->token,
+                 "Encountered source mapping issue for node type %i, please report this issue.",
+                 node->type);
         return;
     }
 

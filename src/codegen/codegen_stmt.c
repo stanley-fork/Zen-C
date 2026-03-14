@@ -521,7 +521,8 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
             if (is_string_literal)
             {
                 char *inner = body->literal.string_val;
-                char *code = process_printf_sugar(ctx, body->token, inner, 1, "stdout", NULL, NULL, 0);
+                char *code =
+                    process_printf_sugar(ctx, body->token, inner, 1, "stdout", NULL, NULL, 0);
                 fprintf(out, "%s;", code);
                 free(code);
             }
@@ -810,7 +811,6 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                 // Check if type implements Drop
                 int has_drop = 0;
                 char *drop_type_name = NULL;
-                Token drop_token;
 
                 if (arg_type->kind == TYPE_FUNCTION ||
                     (arg_type->kind == TYPE_STRUCT && arg_type->name))

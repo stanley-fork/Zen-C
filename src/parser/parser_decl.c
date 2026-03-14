@@ -812,7 +812,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
         if (lexer_peek(&lookahead).type != TOK_LBRACE)
         {
             // Proceed to consume
-            Token tk = lexer_next(l); // eat defer (real)
+            tk = lexer_next(l); // eat defer (real)
 
             // Parse the defer expression/statement
             // Usually defer close(it);

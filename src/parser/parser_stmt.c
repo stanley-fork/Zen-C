@@ -1777,8 +1777,8 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
     return n;
 }
 
-char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *content, int newline, const char *target,
-                           char ***used_syms, int *count, int check_symbols)
+char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *content, int newline,
+                           const char *target, char ***used_syms, int *count, int check_symbols)
 {
     int saved_silent = ctx->silent_warnings;
     ctx->silent_warnings = !check_symbols;
@@ -2355,7 +2355,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
 
     if (tk.type == TOK_PREPROC)
     {
-        Token tk = lexer_next(l); // consume token
+        tk = lexer_next(l); // consume token
         char *content = xmalloc(tk.len + 2);
         strncpy(content, tk.start, tk.len);
         content[tk.len] = '\n'; // Ensure newline

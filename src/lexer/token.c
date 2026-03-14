@@ -134,7 +134,8 @@ Token lexer_next(Lexer *l)
         if (l->emit_comments)
         {
             size_t len = s - comment_start;
-            return (Token){TOK_COMMENT, comment_start, len, start_line, start_col, g_current_filename};
+            return (Token){TOK_COMMENT, comment_start, len,
+                           start_line,  start_col,     g_current_filename};
         }
 
         return lexer_next(l);
