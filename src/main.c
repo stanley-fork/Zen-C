@@ -157,7 +157,7 @@ int main(int argc, char **argv)
         }
     }
 
-    char *optimization_level = NULL;
+    const char *optimization_level = NULL;
 
     // Parse args
     for (int i = arg_start; i < argc; i++)
@@ -433,17 +433,6 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, COLOR_BOLD COLOR_RED "error" COLOR_RESET ": no input file specified\n");
         return 1;
-    }
-
-    if (g_config.mode_debug && g_config.mode_run)
-    {
-        // Debug requires -g
-        main_append_flag(g_config.gcc_flags, sizeof(g_config.gcc_flags), "-g", NULL);
-
-        if (optimization_level)
-        {
-            zwarn("You are debugging an optimized program.");
-        }
     }
 
     g_current_filename = g_config.input_file;
@@ -763,12 +752,11 @@ int main(int argc, char **argv)
         if (g_config.output_file)
         {
             printf(COLOR_BOLD COLOR_CYAN "  Transpiled" COLOR_RESET " to %s\n",
-                    g_config.output_file);
+                   g_config.output_file);
         }
         else
         {
-            printf(COLOR_BOLD COLOR_CYAN "  Transpiled" COLOR_RESET " to %s\n",
-                    temp_source_file);
+            printf(COLOR_BOLD COLOR_CYAN "  Transpiled" COLOR_RESET " to %s\n", temp_source_file);
         }
         // Done, no C compilation
         return 0;
@@ -792,6 +780,27 @@ int main(int argc, char **argv)
             printf(" %s", compile_args.args[i]);
         }
         printf("\n");
+    }
+
+    if (g_config.mode_debug && g_config.mode_run)
+    {
+        // Debug requires -g
+        main_append_flag(g_config.gcc_flags, sizeof(g_config.gcc_flags), "-g", NULL);
+
+        if (!optimization_level)
+        {
+            // Check for //> cflags: -O...
+            const char *substr = strstr(g_cflags, "-O");
+            if (substr && *(substr + 2) != '0')
+            {
+                optimization_level = substr;
+            }
+        }
+
+        if (optimization_level)
+        {
+            zwarn("You are debugging an optimized program!");
+        }
     }
 
     int ret = arg_run(&compile_args);
