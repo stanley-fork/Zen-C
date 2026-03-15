@@ -47,7 +47,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout main || git checkout -b main
           git add rosetta/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto-sync new Rosetta Code examples" && git push origin main)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto-sync new Rosetta Code examples" && git push https://x-access-token:${{ secrets.WEBSITE_REPO_TOKEN }}@github.com/z-libs/Awesome-Zen-C.git HEAD:main)
 
       - name: Update submodule pointer in Zen-C Repo
         run: |
