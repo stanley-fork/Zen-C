@@ -305,6 +305,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
     {
         return;
     }
+
     switch (node->type)
     {
     case NODE_MATCH:
@@ -592,6 +593,9 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
         break;
     case NODE_EXPR_CALL:
     {
+        // Always give the ability to step into a function call
+        emit_source_mapping(node, out);
+
         if (node->call.callee->type == NODE_EXPR_MEMBER)
         {
             ASTNode *target = node->call.callee->member.target;
@@ -1389,6 +1393,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
         codegen_walker(ctx, node->block.statements, out);
         for (int i = defer_count - 1; i >= saved; i--)
         {
+            emit_source_mapping_duplicate(defer_stack[i], out);
             codegen_node_single(ctx, defer_stack[i], out);
         }
         defer_count = saved;

@@ -500,6 +500,7 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
         exit_scope(ctx);
 
         ASTNode *c = ast_create(NODE_MATCH_CASE);
+        c->token = pk;
         c->match_case.pattern = pattern;
         c->match_case.binding_names = bindings;
         c->match_case.binding_count = binding_count;
@@ -531,9 +532,10 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
 
 ASTNode *parse_loop(ParserContext *ctx, Lexer *l)
 {
-    lexer_next(l);
+    Token tk = lexer_next(l);
     ASTNode *b = parse_block(ctx, l);
     ASTNode *n = ast_create(NODE_LOOP);
+    n->token = tk;
     n->loop_stmt.body = b;
     return n;
 }
@@ -563,7 +565,7 @@ ASTNode *parse_unless(ParserContext *ctx, Lexer *l)
 
 ASTNode *parse_guard(ParserContext *ctx, Lexer *l)
 {
-    lexer_next(l); // consume 'guard'
+    Token tk = lexer_next(l); // consume 'guard'
 
     // Parse the condition as an AST
     ASTNode *cond = parse_expression(ctx, l);
@@ -590,6 +592,7 @@ ASTNode *parse_guard(ParserContext *ctx, Lexer *l)
 
     // Create the node
     ASTNode *n = ast_create(NODE_GUARD);
+    n->token = tk;
     n->guard_stmt.condition = cond;
     n->guard_stmt.body = body;
     return n;
@@ -983,7 +986,7 @@ ASTNode *parse_test(ParserContext *ctx, Lexer *l)
 
 ASTNode *parse_assert(ParserContext *ctx, Lexer *l)
 {
-    lexer_next(l); // assert
+    Token tk = lexer_next(l); // assert
     if (lexer_peek(l).type == TOK_LPAREN)
     {
         lexer_next(l); // optional paren? usually yes
@@ -1015,6 +1018,7 @@ ASTNode *parse_assert(ParserContext *ctx, Lexer *l)
     }
 
     ASTNode *n = ast_create(NODE_ASSERT);
+    n->token = tk;
     n->assert_stmt.condition = cond;
     n->assert_stmt.message = msg;
     return n;
@@ -1078,6 +1082,7 @@ ASTNode *parse_return(ParserContext *ctx, Lexer *l)
         if (is_tuple_lit)
         {
             n->ret.value = parse_tuple_expression(ctx, l, curr_func_ret, NULL);
+            n->ret.value->token = return_token;
             handled = 1;
         }
     }
@@ -1103,7 +1108,7 @@ ASTNode *parse_return(ParserContext *ctx, Lexer *l)
 
 ASTNode *parse_if(ParserContext *ctx, Lexer *l)
 {
-    lexer_next(l); // eat if
+    Token if_token = lexer_next(l); // eat if
     ASTNode *cond = parse_expression(ctx, l);
     check_assignment_condition(cond);
 
@@ -1146,6 +1151,7 @@ ASTNode *parse_if(ParserContext *ctx, Lexer *l)
         }
     }
     ASTNode *n = ast_create(NODE_IF);
+    n->token = if_token;
     n->if_stmt.condition = cond;
     n->if_stmt.then_body = then_b;
     n->if_stmt.else_body = else_b;
@@ -1154,7 +1160,7 @@ ASTNode *parse_if(ParserContext *ctx, Lexer *l)
 
 ASTNode *parse_while(ParserContext *ctx, Lexer *l)
 {
-    lexer_next(l);
+    Token tk = lexer_next(l);
     ASTNode *cond = parse_expression(ctx, l);
     check_assignment_condition(cond);
 
@@ -1175,6 +1181,7 @@ ASTNode *parse_while(ParserContext *ctx, Lexer *l)
         body = parse_statement(ctx, l);
     }
     ASTNode *n = ast_create(NODE_WHILE);
+    n->token = tk;
     n->while_stmt.condition = cond;
     n->while_stmt.body = body;
     return n;
@@ -1182,7 +1189,7 @@ ASTNode *parse_while(ParserContext *ctx, Lexer *l)
 
 ASTNode *parse_for(ParserContext *ctx, Lexer *l)
 {
-    lexer_next(l);
+    Token for_token = lexer_next(l);
 
     if (lexer_peek(l).type == TOK_IDENT)
     {
@@ -1206,7 +1213,8 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
         if (in_tok.type == TOK_IDENT && strncmp(in_tok.start, "in", 2) == 0)
         {
             ASTNode *start_expr = parse_expression(ctx, l);
-            ZenTokenType next_tok = lexer_peek(l).type;
+            Token tk = lexer_peek(l);
+            ZenTokenType next_tok = tk.type;
             if (next_tok == TOK_DOTDOT || next_tok == TOK_DOTDOT_LT || next_tok == TOK_DOTDOT_EQ)
             {
                 int is_inclusive = 0;
@@ -1225,6 +1233,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                     ASTNode *end_expr = parse_expression(ctx, l);
 
                     ASTNode *n = ast_create(NODE_FOR_RANGE);
+                    n->token = for_token;
                     n->for_range.var_name = xmalloc(var.len + 1);
                     strncpy(n->for_range.var_name, var.start, var.len);
                     n->for_range.var_name[var.len] = 0;
@@ -1281,6 +1290,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                     if (enum_idx_name)
                     {
                         ASTNode *idx_decl = ast_create(NODE_VAR_DECL);
+                        idx_decl->token = tk;
                         idx_decl->var_decl.name = xstrdup("__zc_enum_idx");
                         idx_decl->var_decl.type_str = xstrdup("int");
                         idx_decl->var_decl.type_info = type_new(TYPE_INT);
@@ -1291,6 +1301,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                         idx_decl->var_decl.init_expr = zero_lit;
 
                         ASTNode *idx_bind = ast_create(NODE_VAR_DECL);
+                        idx_bind->token = tk;
                         idx_bind->var_decl.name = enum_idx_name;
                         idx_bind->var_decl.type_str = xstrdup("int");
                         idx_bind->var_decl.type_info = type_new(TYPE_INT);
@@ -1366,6 +1377,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                     obj_expr->type_info->array_size > 0)
                 {
                     slice_decl = ast_create(NODE_VAR_DECL);
+                    slice_decl->token = tk;
                     slice_decl->var_decl.name = xstrdup("__zc_arr_slice");
 
                     char *elem_type_str = type_to_string(obj_expr->type_info->inner);
@@ -1374,6 +1386,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                     slice_decl->var_decl.type_str = xstrdup(slice_type);
 
                     ASTNode *from_array_call = ast_create(NODE_EXPR_CALL);
+                    from_array_call->token = tk;
                     ASTNode *static_method = ast_create(NODE_EXPR_VAR);
 
                     char func_name[512];
@@ -1426,6 +1439,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 }
 
                 ASTNode *it_decl = ast_create(NODE_VAR_DECL);
+                it_decl->token = tk;
                 it_decl->var_decl.name = xstrdup("__it");
                 it_decl->var_decl.type_str = NULL;
 
@@ -1433,6 +1447,8 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 ASTNode *memb_iter = ast_create(NODE_EXPR_MEMBER);
                 memb_iter->member.target = obj_expr;
                 memb_iter->member.field = xstrdup(iter_method);
+                memb_iter->token = tk;
+                call_iter->token = tk;
                 call_iter->call.callee = memb_iter;
                 call_iter->call.args = NULL;
                 call_iter->call.arg_count = 0;
@@ -1444,9 +1460,12 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 true_lit->literal.type_kind = LITERAL_INT;
                 true_lit->literal.int_val = 1;
                 true_lit->literal.string_val = xstrdup("1");
+                true_lit->token = tk;
+                while_loop->token = tk;
                 while_loop->while_stmt.condition = true_lit;
 
                 ASTNode *loop_body = ast_create(NODE_BLOCK);
+                loop_body->token = tk;
                 ASTNode *stmts_head = NULL;
                 ASTNode *stmts_tail = NULL;
 
@@ -1492,6 +1511,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
 
                 // var __opt = __it.next();
                 ASTNode *opt_decl = ast_create(NODE_VAR_DECL);
+                opt_decl->token = tk;
                 opt_decl->var_decl.name = xstrdup("__opt");
                 opt_decl->var_decl.type_str = NULL;
 
@@ -1506,6 +1526,8 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 }
                 memb_next->member.target = it_ref;
                 memb_next->member.field = xstrdup("next");
+                memb_next->token = tk;
+                call_next->token = tk;
                 call_next->call.callee = memb_next;
 
                 opt_decl->var_decl.init_expr = call_next;
@@ -1522,16 +1544,20 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 }
                 memb_is_none->member.target = opt_ref1;
                 memb_is_none->member.field = xstrdup("is_none");
+                memb_is_none->token = tk;
+                call_is_none->token = tk;
                 call_is_none->call.callee = memb_is_none;
                 call_is_none->call.args = NULL;
                 call_is_none->call.arg_count = 0;
 
                 // if (__opt.is_none()) break;
                 ASTNode *if_break = ast_create(NODE_IF);
+                if_break->token = tk;
                 if_break->if_stmt.condition = call_is_none;
 
                 ASTNode *break_blk = ast_create(NODE_BLOCK);
                 break_blk->block.statements = ast_create(NODE_BREAK);
+                break_blk->block.statements->token = tk;
 
                 if_break->if_stmt.then_body = break_blk;
                 if_break->if_stmt.else_body = NULL;
@@ -1539,6 +1565,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
 
                 // var <user_var> = __opt.unwrap();
                 ASTNode *user_var_decl = ast_create(NODE_VAR_DECL);
+                user_var_decl->token = tk;
                 user_var_decl->var_decl.name = var_name;
                 user_var_decl->var_decl.type_str = NULL;
 
@@ -1553,6 +1580,8 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 }
                 memb_unwrap->member.target = opt_ref2;
                 memb_unwrap->member.field = xstrdup("unwrap");
+                memb_unwrap->token = tk;
+                call_unwrap->token = tk;
                 call_unwrap->call.callee = memb_unwrap;
                 call_unwrap->call.args = NULL;
                 call_unwrap->call.arg_count = 0;
@@ -1563,6 +1592,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 if (enum_idx_name)
                 {
                     ASTNode *idx_bind = ast_create(NODE_VAR_DECL);
+                    idx_bind->token = tk;
                     idx_bind->var_decl.name = enum_idx_name;
                     idx_bind->var_decl.type_str = xstrdup("int");
                     idx_bind->var_decl.type_info = type_new(TYPE_INT);
@@ -1618,6 +1648,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                 if (enum_idx_name)
                 {
                     enum_idx_decl_node = ast_create(NODE_VAR_DECL);
+                    enum_idx_decl_node->token = tk;
                     enum_idx_decl_node->var_decl.name = xstrdup("__zc_enum_idx");
                     enum_idx_decl_node->var_decl.type_str = xstrdup("int");
                     enum_idx_decl_node->var_decl.type_info = type_new(TYPE_INT);
@@ -1738,6 +1769,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
     exit_scope(ctx);
 
     ASTNode *n = ast_create(NODE_FOR);
+    n->token = for_token;
     n->for_stmt.init = init;
     n->for_stmt.condition = cond;
     n->for_stmt.step = step;
@@ -1745,8 +1777,8 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
     return n;
 }
 
-char *process_printf_sugar(ParserContext *ctx, const char *content, int newline, const char *target,
-                           char ***used_syms, int *count, int check_symbols)
+char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *content, int newline,
+                           const char *target, char ***used_syms, int *count, int check_symbols)
 {
     int saved_silent = ctx->silent_warnings;
     ctx->silent_warnings = !check_symbols;
@@ -1864,6 +1896,9 @@ char *process_printf_sugar(ParserContext *ctx, const char *content, int newline,
         {
             Lexer lex;
             lexer_init(&lex, clean_expr); // Scan original for symbols
+            lex.line = srctoken.line;
+            lex.col = srctoken.col;
+
             Token t;
             while ((t = lexer_next(&lex)).type != TOK_EOF)
             {
@@ -1896,6 +1931,8 @@ char *process_printf_sugar(ParserContext *ctx, const char *content, int newline,
         // Parse expression fully
         Lexer lex;
         lexer_init(&lex, clean_expr);
+        lex.line = srctoken.line;
+        lex.col = srctoken.col;
 
         ASTNode *expr_node = parse_expression(ctx, &lex);
 
@@ -2276,6 +2313,7 @@ ASTNode *parse_macro_call(ParserContext *ctx, Lexer *l, char *macro_name)
 
     // Create Raw Statement/Expression Node
     ASTNode *n = ast_create(NODE_RAW_STMT);
+    n->token = start_tok;
     n->line = start_tok.line;
     n->raw_stmt.content = expanded_code;
 
@@ -2317,12 +2355,13 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
 
     if (tk.type == TOK_PREPROC)
     {
-        lexer_next(l); // consume token
+        tk = lexer_next(l); // consume token
         char *content = xmalloc(tk.len + 2);
         strncpy(content, tk.start, tk.len);
         content[tk.len] = '\n'; // Ensure newline
         content[tk.len + 1] = 0;
         ASTNode *raw_s = ast_create(NODE_RAW_STMT);
+        raw_s->token = tk;
         raw_s->raw_stmt.content = content;
         return raw_s;
     }
@@ -2331,7 +2370,8 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
     {
         Lexer lookahead = *l;
         lexer_next(&lookahead);
-        ZenTokenType next_type = lexer_peek(&lookahead).type;
+        Token next = lexer_peek(&lookahead);
+        ZenTokenType next_type = next.type;
 
         if (next_type == TOK_SEMICOLON || next_type == TOK_DOTDOT || next_type == TOK_RBRACE)
         {
@@ -2362,7 +2402,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
             char **used_syms = NULL;
             int used_count = 0;
             char *code =
-                process_printf_sugar(ctx, inner, is_ln, "stdout", &used_syms, &used_count, 1);
+                process_printf_sugar(ctx, next, inner, is_ln, "stdout", &used_syms, &used_count, 1);
 
             if (next_type == TOK_SEMICOLON)
             {
@@ -2540,6 +2580,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
             content[len] = 0;
 
             ASTNode *raw_s = ast_create(NODE_RAW_STMT);
+            raw_s->token = tk;
             raw_s->raw_stmt.content = normalize_raw_content(content);
             free(content);
             return raw_s;
@@ -2937,7 +2978,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
             char **used_syms = NULL;
             int used_count = 0;
             char *code =
-                process_printf_sugar(ctx, inner, is_ln, target, &used_syms, &used_count, 1);
+                process_printf_sugar(ctx, t, inner, is_ln, target, &used_syms, &used_count, 1);
             free(inner);
 
             if (lexer_peek(l).type == TOK_SEMICOLON)
@@ -2946,6 +2987,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
             }
 
             ASTNode *n = ast_create(NODE_RAW_STMT);
+            n->token = t;
             // Append semicolon to Statement Expression to make it a valid statement
             char *stmt_code = xmalloc(strlen(code) + 2);
             sprintf(stmt_code, "%s;", code);
@@ -3027,7 +3069,7 @@ ASTNode *parse_block(ParserContext *ctx, Lexer *l)
     expect(l, TOK_LBRACE, "Expected '{' to start a block");
     enter_scope(ctx);
     ASTNode *head = 0, *tail = 0;
-
+    Token t = lexer_peek(l);
     int unreachable = 0;
 
     while (1)
@@ -3145,6 +3187,7 @@ ASTNode *parse_block(ParserContext *ctx, Lexer *l)
 
     exit_scope(ctx);
     ASTNode *b = ast_create(NODE_BLOCK);
+    b->token = t;
     b->block.statements = head;
     return b;
 }

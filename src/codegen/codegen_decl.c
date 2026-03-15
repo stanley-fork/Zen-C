@@ -583,6 +583,7 @@ void emit_lambda_defs(ParserContext *ctx, FILE *out)
 
         for (int i = defer_count - 1; i >= 0; i--)
         {
+            emit_source_mapping_duplicate(defer_stack[i], out);
             codegen_node_single(ctx, defer_stack[i], out);
         }
 
@@ -1436,6 +1437,7 @@ int emit_tests_and_runner(ParserContext *ctx, ASTNode *node, FILE *out)
             // Run defers
             for (int i = defer_count - 1; i >= saved; i--)
             {
+                emit_source_mapping_duplicate(defer_stack[i], out);
                 codegen_node_single(ctx, defer_stack[i], out);
             }
             defer_count = saved;
@@ -1597,4 +1599,55 @@ void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes)
         }
         local = local->next;
     }
+}
+
+static int last_source_mapping_line = -1;
+static NodeType last_source_mapping_type = NODE_ROOT;
+static int allow_duplicate_source_mapping = 0;
+
+int should_emit_source_mapping(ASTNode *node)
+{
+    return node && node->type < NODE_REPL_PRINT && node->type != NODE_BLOCK &&
+           node->type != NODE_EXPR_UNARY && node->type != NODE_FIELD;
+}
+
+void emit_source_mapping_duplicate(ASTNode *node, FILE *out)
+{
+    allow_duplicate_source_mapping++;
+    emit_source_mapping(node, out);
+    allow_duplicate_source_mapping--;
+}
+
+void emit_source_mapping(ASTNode *node, FILE *out)
+{
+    if (!g_config.mode_debug)
+    {
+        return;
+    }
+
+    if (!should_emit_source_mapping(node))
+    {
+        return;
+    }
+
+    if (allow_duplicate_source_mapping <= 0)
+    {
+        if (node->token.line == last_source_mapping_line && node->type == last_source_mapping_type)
+        {
+            return;
+        }
+    }
+
+    if (!node->token.start || !node->token.file)
+    {
+        zwarn_at(node->token,
+                 "Encountered source mapping issue for node type %i, please report this issue.",
+                 node->type);
+        return;
+    }
+
+    last_source_mapping_line = node->token.line;
+    last_source_mapping_type = node->type;
+
+    fprintf(out, "\n#line %i \"%s\"\n", node->token.line, node->token.file);
 }

@@ -1147,12 +1147,14 @@ char *escape_c_string(const char *input)
 static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, char *content, int len)
 {
     ASTNode *block = ast_create(NODE_BLOCK);
+    block->token = parent_token;
     block->type_info = type_new(TYPE_STRING);
     block->resolved_type = xstrdup("string");
 
     ASTNode *head = NULL, *tail = NULL;
 
     ASTNode *decl_b = ast_create(NODE_RAW_STMT);
+    decl_b->token = parent_token;
     decl_b->raw_stmt.content = xstrdup("static char _b[4096]; _b[0]=0;");
     if (!head)
     {
@@ -1165,6 +1167,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
     tail = decl_b;
 
     ASTNode *decl_t = ast_create(NODE_RAW_STMT);
+    decl_t->token = parent_token;
     decl_t->raw_stmt.content = xstrdup("char _t[128];");
     tail->next = decl_t;
     tail = decl_t;
@@ -1204,6 +1207,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
             {
                 int seg_len = dbl_close - cur;
                 ASTNode *cat = ast_create(NODE_RAW_STMT);
+                cat->token = parent_token;
                 char *txt = xmalloc(seg_len + 1);
                 strncpy(txt, cur, seg_len);
                 txt[seg_len] = 0;
@@ -1216,6 +1220,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
                 free(txt);
             }
             ASTNode *cat = ast_create(NODE_RAW_STMT);
+            cat->token = parent_token;
             cat->raw_stmt.content = xstrdup("strcat(_b, \"}\");");
             tail->next = cat;
             tail = cat;
@@ -1229,6 +1234,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
             {
                 int seg_len = end - cur;
                 ASTNode *cat = ast_create(NODE_RAW_STMT);
+                cat->token = parent_token;
                 char *txt = xmalloc(seg_len + 1);
                 strncpy(txt, cur, seg_len);
                 txt[seg_len] = 0;
@@ -1247,6 +1253,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
         {
             int seg_len = brace - cur;
             ASTNode *cat = ast_create(NODE_RAW_STMT);
+            cat->token = parent_token;
             char *txt = xmalloc(seg_len + 1);
             strncpy(txt, cur, seg_len);
             txt[seg_len] = 0;
@@ -1262,6 +1269,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
         if (brace + 1 < end && brace[1] == '{')
         {
             ASTNode *cat = ast_create(NODE_RAW_STMT);
+            cat->token = parent_token;
             cat->raw_stmt.content = xstrdup("strcat(_b, \"{\");");
             tail->next = cat;
             tail = cat;
@@ -1435,7 +1443,9 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
         }
 
         ASTNode *call_sprintf = ast_create(NODE_EXPR_CALL);
+        call_sprintf->token = peek;
         ASTNode *callee = ast_create(NODE_EXPR_VAR);
+        callee->token = peek;
         callee->var_ref.name = xstrdup("sprintf");
         call_sprintf->call.callee = callee;
 
@@ -1455,6 +1465,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
         else
         {
             ASTNode *call_macro = ast_create(NODE_EXPR_CALL);
+            call_macro->token = peek;
             ASTNode *macro_callee = ast_create(NODE_EXPR_VAR);
             macro_callee->var_ref.name = xstrdup("_z_str");
             call_macro->call.callee = macro_callee;
@@ -1479,6 +1490,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
 
         // strcat(_b, _t)
         ASTNode *cat_t = ast_create(NODE_RAW_STMT);
+        cat_t->token = peek;
         cat_t->raw_stmt.content = xstrdup("strcat(_b, _t);");
         tail->next = cat_t;
         tail = cat_t;
@@ -1491,6 +1503,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
     }
 
     ASTNode *ret_b = ast_create(NODE_RAW_STMT);
+    ret_b->token = parent_token;
     ret_b->raw_stmt.content = xstrdup("_b;");
     tail->next = ret_b;
     tail = ret_b;
@@ -2093,6 +2106,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         }
 
         node = ast_create(NODE_IF);
+        node->token = t;
         node->if_stmt.condition = cond;
         node->if_stmt.then_body = then_b;
         node->if_stmt.else_body = else_b;
@@ -2262,6 +2276,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             exit_scope(ctx);
 
             ASTNode *c = ast_create(NODE_MATCH_CASE);
+            c->token = pk;
             c->match_case.pattern = pattern;
             c->match_case.binding_names = bindings;      // New multi-binding field
             c->match_case.binding_count = binding_count; // New binding count field
@@ -2996,6 +3011,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                 }
                 lexer_next(l);
                 node = ast_create(NODE_EXPR_STRUCT_INIT);
+                node->token = t;
                 node->struct_init.struct_name = struct_name;
                 Type *init_type = type_new(TYPE_STRUCT);
                 init_type->name = xstrdup(struct_name);
@@ -3042,6 +3058,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                         ASTNode *assign = ast_create(NODE_VAR_DECL);
                         char name[16];
                         snprintf(name, sizeof(name), "_v%d", idx);
+                        assign->token = t;
                         assign->var_decl.name = xstrdup(name);
                         assign->var_decl.init_expr = val;
                         if (!head)
@@ -3076,6 +3093,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                         }
                         ASTNode *val = parse_expression(ctx, l);
                         ASTNode *assign = ast_create(NODE_VAR_DECL);
+                        assign->token = t;
                         assign->var_decl.name = token_strdup(fn);
                         assign->var_decl.init_expr = val;
                         if (!head)
@@ -3239,6 +3257,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             if (ac == 0)
             {
                 node = ast_create(NODE_EXPR_CALL);
+                node->token = t;
                 ASTNode *callee = ast_create(NODE_EXPR_VAR);
                 callee->var_ref.name = xstrdup("_z_readln_raw");
                 node->call.callee = callee;
@@ -3300,6 +3319,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                 }
 
                 node = ast_create(NODE_EXPR_CALL);
+                node->token = t;
                 ASTNode *callee = ast_create(NODE_EXPR_VAR);
                 callee->var_ref.name = xstrdup("_z_scan_helper");
                 node->call.callee = callee;
@@ -3781,6 +3801,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             node = ast_create(NODE_EXPR_CALL);
             node->token = t;
             ASTNode *callee = ast_create(NODE_EXPR_VAR);
+            callee->token = t;
             callee->var_ref.name = acc;
             node->call.callee = callee;
             node->call.args = head;
@@ -4116,6 +4137,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                     ASTNode *target = parse_expr_prec(ctx, l, PREC_UNARY);
 
                     node = ast_create(NODE_EXPR_CAST);
+                    node->token = next;
                     node->cast.target_type = cast_type;
                     node->cast.expr = target;
                     node->type_info = cast_type_obj;
@@ -4401,6 +4423,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             }
 
             ASTNode *call = ast_create(NODE_EXPR_CALL);
+            call->token = t;
             call->call.callee = node;
             call->call.args = head;
             call->call.arg_names = has_named ? arg_names : NULL;
@@ -4480,6 +4503,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                 {
                     // Rewrite to Call: node.get(index, ...)
                     ASTNode *call = ast_create(NODE_EXPR_CALL);
+                    call->token = t;
                     ASTNode *callee = ast_create(NODE_EXPR_VAR);
                     callee->var_ref.name = xstrdup(mangled);
                     call->call.callee = callee;
@@ -4528,6 +4552,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             if (!overloaded_get)
             {
                 ASTNode *idx_node = ast_create(NODE_EXPR_INDEX);
+                idx_node->token = t;
                 idx_node->index.array = node;
                 idx_node->index.index = index;
                 idx_node->index.extra_indices = extra_head;
@@ -4958,7 +4983,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
             }
 
             // Reuse printf sugar to generate the prompt print
-            char *print_code = process_printf_sugar(ctx, inner, 0, "stdout", NULL, NULL, 1);
+            char *print_code = process_printf_sugar(ctx, t_str, inner, 0, "stdout", NULL, NULL, 1);
             free(inner);
 
             // Checks for (args...) suffix for SCAN mode
@@ -5048,6 +5073,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 ASTNode *block = ast_create(NODE_BLOCK);
 
                 ASTNode *s1 = ast_create(NODE_RAW_STMT);
+                s1->token = t_str;
                 // Append semicolon to ensure it's a valid statement
                 char *s1_code = xmalloc(strlen(print_code) + 2);
                 sprintf(s1_code, "%s;", print_code);
@@ -5055,6 +5081,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 free(print_code);
 
                 ASTNode *call = ast_create(NODE_EXPR_CALL);
+                call->token = t;
                 ASTNode *callee = ast_create(NODE_EXPR_VAR);
                 callee->var_ref.name = xstrdup("_z_scan_helper");
                 call->call.callee = callee;
@@ -5095,6 +5122,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 free(print_code);
 
                 ASTNode *n = ast_create(NODE_RAW_STMT);
+                n->token = next;
                 char *stmt_code = xmalloc(strlen(final_code) + 2);
                 sprintf(stmt_code, "%s;", final_code);
                 free(final_code);
@@ -5174,6 +5202,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
             }
 
             ASTNode *call = ast_create(NODE_EXPR_CALL);
+            call->token = t;
             ASTNode *callee = ast_create(NODE_EXPR_VAR);
             callee->var_ref.name = xstrdup("_z_scan_helper");
             call->call.callee = callee;
@@ -5228,10 +5257,12 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 newline = 0;
             }
 
-            char *code = process_printf_sugar(ctx, inner, newline, "stderr", NULL, NULL, 1);
+            char *code =
+                process_printf_sugar(ctx, lexer_peek(l), inner, newline, "stderr", NULL, NULL, 1);
             free(inner);
 
             ASTNode *n = ast_create(NODE_RAW_STMT);
+            n->token = t_str;
             char *stmt_code = xmalloc(strlen(code) + 2);
             sprintf(stmt_code, "%s;", code);
             free(code);
@@ -5434,6 +5465,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 {
                     // Rewrite: ~x -> Struct_bitnot(x)
                     ASTNode *call = ast_create(NODE_EXPR_CALL);
+                    call->token = t;
                     ASTNode *callee = ast_create(NODE_EXPR_VAR);
                     callee->var_ref.name = xstrdup(mangled);
                     call->call.callee = callee;
@@ -5795,6 +5827,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 ASTNode *tern = ast_create(NODE_TERNARY);
                 zen_trigger_at(TRIGGER_TERNARY, lhs->token);
 
+                tern->token = lhs->token;
                 tern->ternary.cond = lhs;
                 tern->ternary.true_expr = true_expr;
                 tern->ternary.false_expr = false_expr;
@@ -5833,6 +5866,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
             else
             {
                 ASTNode *call = ast_create(NODE_EXPR_CALL);
+                call->token = t;
                 call->call.callee = rhs;
                 call->call.args = lhs;
                 lhs->next = NULL;
@@ -5847,6 +5881,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
         if (op.type == TOK_LPAREN)
         {
             ASTNode *call = ast_create(NODE_EXPR_CALL);
+            call->token = t;
 
             // Method Resolution Logic (Struct Method -> Trait Method)
             ASTNode *self_arg = NULL;
@@ -6248,6 +6283,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
             else
             {
                 ASTNode *node = ast_create(NODE_EXPR_INDEX);
+                node->token = t;
                 node->index.array = lhs;
                 node->index.index = start;
                 node->index.extra_indices = extra_head;
@@ -6395,6 +6431,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                     {
                         // Rewrite to Call
                         ASTNode *call = ast_create(NODE_EXPR_CALL);
+                        call->token = t;
                         ASTNode *callee;
 
                         if (is_generic_template)
@@ -6413,6 +6450,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                             callee->var_ref.name = xstrdup(resolved_name);
                         }
 
+                        callee->token = t;
                         call->call.callee = callee;
 
                         ASTNode *self_arg = lhs;
@@ -7039,6 +7077,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                     {
                         // Rewrite op_node from BINARY -> CALL
                         ASTNode *call = ast_create(NODE_EXPR_CALL);
+                        call->token = t;
                         ASTNode *callee = ast_create(NODE_EXPR_VAR);
                         callee->var_ref.name = xstrdup(mangled);
                         call->call.callee = callee;
@@ -7101,6 +7140,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                     {
                         // Create NEW Call Node for Set
                         ASTNode *set_call = ast_create(NODE_EXPR_CALL);
+                        set_call->token = t;
                         ASTNode *set_callee = ast_create(NODE_EXPR_VAR);
                         set_callee->var_ref.name = set_name;
                         set_call->call.callee = set_callee;
@@ -7230,6 +7270,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 if (sig)
                 {
                     ASTNode *call = ast_create(NODE_EXPR_CALL);
+                    call->token = t;
                     ASTNode *callee = ast_create(NODE_EXPR_VAR);
                     callee->var_ref.name = xstrdup(mangled);
                     call->call.callee = callee;
@@ -7858,9 +7899,14 @@ ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_nam
 ASTNode *parse_tuple_expression(ParserContext *ctx, Lexer *l, const char *type_name,
                                 ASTNode *first_elem)
 {
+    Token tk;
     if (!first_elem)
     {
-        lexer_next(l); // eat (
+        tk = lexer_next(l); // eat (
+    }
+    else
+    {
+        tk = first_elem->token;
     }
 
     ASTNode *head = first_elem, *prev = first_elem;
@@ -7902,6 +7948,7 @@ ASTNode *parse_tuple_expression(ParserContext *ctx, Lexer *l, const char *type_n
     }
 
     ASTNode *n = ast_create(NODE_EXPR_TUPLE_LITERAL);
+    n->token = tk;
     n->tuple_literal.elements = head;
     n->tuple_literal.count = count;
 

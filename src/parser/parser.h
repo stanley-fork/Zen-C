@@ -980,8 +980,8 @@ ASTNode *parse_return(ParserContext *ctx, Lexer *l);
  * @brief Processes a formatted string.
  */
 char *escape_c_string(const char *input);
-char *process_printf_sugar(ParserContext *ctx, const char *content, int newline, const char *target,
-                           char ***used_syms, int *count, int check_symbols);
+char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *content, int newline,
+                           const char *target, char ***used_syms, int *count, int check_symbols);
 
 /**
  * @brief Parses an assert statement.

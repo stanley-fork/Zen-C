@@ -334,7 +334,7 @@ static void replace_it_with_var(ASTNode *node, char *var_name)
 
 ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
 {
-    lexer_next(l); // eat 'var'
+    Token tk = lexer_next(l); // eat 'var'
 
     // Destructuring: var {x, y} = ... OR var (a: type, b: type) = ...
     if (lexer_peek(l).type == TOK_LBRACE || lexer_peek(l).type == TOK_LPAREN)
@@ -389,6 +389,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
             lexer_next(l);
         }
         ASTNode *n = ast_create(NODE_DESTRUCT_VAR);
+        n->token = tk;
         n->destruct.names = names;
         n->destruct.types = types;
         n->destruct.type_infos = type_infos;
@@ -460,6 +461,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
         }
 
         ASTNode *n = ast_create(NODE_DESTRUCT_VAR);
+        n->token = name_tok;
         n->destruct.names = names;
         n->destruct.field_names = fields;
         n->destruct.count = count;
@@ -512,6 +514,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
         }
 
         ASTNode *n = ast_create(NODE_DESTRUCT_VAR);
+        n->token = t;
         n->destruct.names = xmalloc(sizeof(char *));
         n->destruct.names[0] = val_name;
         n->destruct.count = 1;
@@ -565,6 +568,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
         {
             char *code = parse_array_literal(ctx, l, type);
             init = ast_create(NODE_RAW_STMT);
+            init->token = next;
             init->raw_stmt.content = code;
             if (lexer_peek(l).type == TOK_SEMICOLON)
             {
@@ -575,6 +579,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
         {
             char *code = parse_tuple_literal(ctx, l, type);
             init = ast_create(NODE_RAW_STMT);
+            init->token = next;
             init->raw_stmt.content = code;
             if (lexer_peek(l).type == TOK_SEMICOLON)
             {
@@ -777,6 +782,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
             sprintf(code, "(%s){.self=&%s, .vtable=&%s_%s_VTable}", type, var_ref_name, struct_type,
                     type);
             ASTNode *wrapper = ast_create(NODE_RAW_STMT);
+            wrapper->token = name_tok;
             wrapper->raw_stmt.content = code;
             init = wrapper;
         }
@@ -806,7 +812,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
         if (lexer_peek(&lookahead).type != TOK_LBRACE)
         {
             // Proceed to consume
-            lexer_next(l); // eat defer (real)
+            tk = lexer_next(l); // eat defer (real)
 
             // Parse the defer expression/statement
             // Usually defer close(it);
@@ -822,6 +828,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
             }
 
             ASTNode *d = ast_create(NODE_DEFER);
+            d->token = tk;
             d->defer_stmt.stmt = expr;
 
             // Chain it: var_decl -> defer
@@ -869,10 +876,12 @@ ASTNode *parse_def(ParserContext *ctx, Lexer *l)
     {
         lexer_next(l);
 
-        if (lexer_peek(l).type == TOK_LPAREN && type_str && strncmp(type_str, "Tuple_", 6) == 0)
+        Token tk = lexer_peek(l);
+        if (tk.type == TOK_LPAREN && type_str && strncmp(type_str, "Tuple_", 6) == 0)
         {
             char *code = parse_tuple_literal(ctx, l, type_str);
             i = ast_create(NODE_RAW_STMT);
+            i->token = tk;
             i->raw_stmt.content = code;
         }
         else
@@ -921,6 +930,7 @@ ASTNode *parse_def(ParserContext *ctx, Lexer *l)
     }
 
     ASTNode *o = ast_create(NODE_CONST);
+    o->token = n;
     o->var_decl.name = ns;
     o->var_decl.type_str = type_str;
     o->var_decl.init_expr = i;
