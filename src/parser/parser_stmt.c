@@ -2040,6 +2040,124 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
             char *inferred_type = t ? type_to_string(t) : find_symbol_type(ctx, clean_expr);
 
             int is_bool = 0;
+
+            // Robust string-like detection (Slice/Vector or compatible struct)
+            // MUST run before name-based heuristics to handle pointers to slices/vectors correctly
+            if (t)
+            {
+                Type *base = t;
+                int is_p = 0;
+                if (base->kind == TYPE_POINTER)
+                {
+                    base = base->inner;
+                    is_p = 1;
+                }
+
+                while (base)
+                {
+                    if (base->kind == TYPE_ALIAS)
+                    {
+                        base = base->inner;
+                    }
+                    else if (base->kind == TYPE_STRUCT && base->name)
+                    {
+                        TypeAlias *ta = find_type_alias_node(ctx, base->name);
+                        if (ta && ta->type_info)
+                        {
+                            base = ta->type_info;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                if (base && base->kind == TYPE_ARRAY && base->array_size == 0)
+                {
+                    char *inner_name = type_to_string(base->inner);
+                    char slice_name[256];
+                    sprintf(slice_name, "Slice_%s", inner_name);
+                    free(inner_name);
+
+                    ASTNode *def = find_struct_def(ctx, slice_name);
+                    if (def && def->type == NODE_STRUCT)
+                    {
+                        int has_data = 0;
+                        int has_len = 0;
+                        char *data_type = NULL;
+
+                        ASTNode *curr = def->strct.fields;
+                        while (curr)
+                        {
+                            if (strcmp(curr->field.name, "data") == 0)
+                            {
+                                has_data = 1;
+                                data_type = curr->field.type;
+                            }
+                            else if (strcmp(curr->field.name, "len") == 0)
+                            {
+                                has_len = 1;
+                            }
+                            curr = curr->next;
+                        }
+
+                        if (has_data && has_len && data_type &&
+                            (strstr(data_type, "char") || strstr(data_type, "u8") ||
+                             strstr(data_type, "byte")))
+                        {
+                            char buf[512];
+                            const char *acc = is_p ? "->" : ".";
+                            sprintf(buf, "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ",
+                                    target, rw_expr, acc, rw_expr, acc);
+                            strcat(gen, buf);
+                            goto next_segment;
+                        }
+                    }
+                }
+                else if (base && base->kind == TYPE_STRUCT && base->name)
+                {
+                    ASTNode *def = find_struct_def(ctx, base->name);
+                    if (def && def->type == NODE_STRUCT)
+                    {
+                        int has_data = 0;
+                        int has_len = 0;
+                        char *data_type = NULL;
+
+                        ASTNode *curr = def->strct.fields;
+                        while (curr)
+                        {
+                            if (strcmp(curr->field.name, "data") == 0)
+                            {
+                                has_data = 1;
+                                data_type = curr->field.type;
+                            }
+                            else if (strcmp(curr->field.name, "len") == 0)
+                            {
+                                has_len = 1;
+                            }
+                            curr = curr->next;
+                        }
+
+                        if (has_data && has_len && data_type &&
+                            (strstr(data_type, "char") || strstr(data_type, "u8") ||
+                             strstr(data_type, "byte")))
+                        {
+                            char buf[512];
+                            const char *acc = is_p ? "->" : ".";
+                            sprintf(buf, "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ",
+                                    target, rw_expr, acc, rw_expr, acc);
+                            strcat(gen, buf);
+                            goto next_segment;
+                        }
+                    }
+                }
+            }
+
             if (t && t->kind == TYPE_RUNE)
             {
                 format_spec = "%s";
@@ -2114,121 +2232,6 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                 else if (strstr(inferred_type, "*"))
                 {
                     format_spec = "%p"; // Pointer
-                }
-
-                if (!format_spec && t)
-                {
-                    Type *base = t;
-                    int is_p = 0;
-                    if (base->kind == TYPE_POINTER)
-                    {
-                        base = base->inner;
-                        is_p = 1;
-                    }
-
-                    while (base)
-                    {
-                        if (base->kind == TYPE_ALIAS)
-                        {
-                            base = base->inner;
-                        }
-                        else if (base->kind == TYPE_STRUCT && base->name)
-                        {
-                            TypeAlias *ta = find_type_alias_node(ctx, base->name);
-                            if (ta && ta->type_info)
-                            {
-                                base = ta->type_info;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-
-                    if (base && base->kind == TYPE_ARRAY && base->array_size == 0)
-                    {
-                        char *inner_name = type_to_string(base->inner);
-                        char slice_name[256];
-                        sprintf(slice_name, "Slice_%s", inner_name);
-                        free(inner_name);
-
-                        ASTNode *def = find_struct_def(ctx, slice_name);
-                        if (def && def->type == NODE_STRUCT)
-                        {
-                            int has_data = 0;
-                            int has_len = 0;
-                            char *data_type = NULL;
-
-                            ASTNode *curr = def->strct.fields;
-                            while (curr)
-                            {
-                                if (strcmp(curr->field.name, "data") == 0)
-                                {
-                                    has_data = 1;
-                                    data_type = curr->field.type;
-                                }
-                                else if (strcmp(curr->field.name, "len") == 0)
-                                {
-                                    has_len = 1;
-                                }
-                                curr = curr->next;
-                            }
-
-                            if (has_data && has_len && data_type &&
-                                (strstr(data_type, "char") || strstr(data_type, "u8") ||
-                                 strstr(data_type, "byte")))
-                            {
-                                char buf[512];
-                                const char *acc = is_p ? "->" : ".";
-                                sprintf(buf, "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ",
-                                        target, rw_expr, acc, rw_expr, acc);
-                                strcat(gen, buf);
-                                goto next_segment;
-                            }
-                        }
-                    }
-                    else if (base && base->kind == TYPE_STRUCT && base->name)
-                    {
-                        ASTNode *def = find_struct_def(ctx, base->name);
-                        if (def && def->type == NODE_STRUCT)
-                        {
-                            int has_data = 0;
-                            int has_len = 0;
-                            char *data_type = NULL;
-
-                            ASTNode *curr = def->strct.fields;
-                            while (curr)
-                            {
-                                if (strcmp(curr->field.name, "data") == 0)
-                                {
-                                    has_data = 1;
-                                    data_type = curr->field.type;
-                                }
-                                else if (strcmp(curr->field.name, "len") == 0)
-                                {
-                                    has_len = 1;
-                                }
-                                curr = curr->next;
-                            }
-
-                            if (has_data && has_len && data_type &&
-                                (strstr(data_type, "char") || strstr(data_type, "u8") ||
-                                 strstr(data_type, "byte")))
-                            {
-                                char buf[512];
-                                const char *acc = is_p ? "->" : ".";
-                                sprintf(buf, "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ",
-                                        target, rw_expr, acc, rw_expr, acc);
-                                strcat(gen, buf);
-                                goto next_segment;
-                            }
-                        }
-                    }
                 }
 
                 if (t)

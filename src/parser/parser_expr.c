@@ -7965,17 +7965,27 @@ ASTNode *parse_tuple_expression(ParserContext *ctx, Lexer *l, const char *type_n
         while (curr)
         {
             char *it = infer_type(ctx, curr);
+            const char *type_name_to_append = it ? it : "int";
+
             if (i > 0)
             {
-                strcat(sig, "__");
+                if (strlen(sig) + 2 < sizeof(sig))
+                {
+                    strcat(sig, "__");
+                }
             }
-            strcat(sig, it ? it : "int");
+
+            if (strlen(sig) + strlen(type_name_to_append) < sizeof(sig))
+            {
+                strcat(sig, type_name_to_append);
+            }
+
             curr = curr->next;
             i++;
         }
         register_tuple(ctx, sig);
-        char tuple_name[1024];
-        sprintf(tuple_name, "Tuple_%s", sig);
+        char tuple_name[1024 + 16];
+        snprintf(tuple_name, sizeof(tuple_name), "Tuple_%s", sig);
         n->resolved_type = xstrdup(tuple_name);
     }
     return n;
