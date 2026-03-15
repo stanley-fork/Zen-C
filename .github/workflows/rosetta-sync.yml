@@ -14,7 +14,6 @@ jobs:
         with:
           path: 'zen-c'
           token: ${{ secrets.WEBSITE_REPO_TOKEN }}
-          submodules: 'true'
           fetch-depth: 0
 
       - name: Checkout Website Repository
@@ -28,6 +27,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Setup Submodules
+        run: |
+          cd zen-c
+          git config --global url."https://x-access-token:${{ secrets.WEBSITE_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git submodule init examples
+          git submodule update --remote examples || (cd examples && git checkout main && git pull origin main)
 
       - name: Run Rosetta Code Scraper
         run: |
