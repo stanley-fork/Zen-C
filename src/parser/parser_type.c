@@ -769,8 +769,10 @@ Type *parse_type_base(ParserContext *ctx, Lexer *l)
 
         register_tuple(ctx, sig);
 
-        char *tuple_name = xmalloc(strlen(sig) + 7);
-        sprintf(tuple_name, "Tuple_%s", sig);
+        char *clean_sig = sanitize_mangled_name(sig);
+        char *tuple_name = xmalloc(strlen(clean_sig) + 7);
+        sprintf(tuple_name, "Tuple_%s", clean_sig);
+        free(clean_sig);
 
         Type *ty = type_new(TYPE_STRUCT);
         ty->name = tuple_name;

@@ -1550,8 +1550,10 @@ void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes)
     TupleType *t = ctx->used_tuples;
     while (t)
     {
-        fprintf(out, "typedef struct Tuple_%s Tuple_%s;\nstruct Tuple_%s { ", t->sig, t->sig,
-                t->sig);
+        char *clean_sig = sanitize_mangled_name(t->sig);
+        fprintf(out, "typedef struct Tuple_%s Tuple_%s;\nstruct Tuple_%s { ", clean_sig, clean_sig,
+                clean_sig);
+        free(clean_sig);
         char *s = xstrdup(t->sig);
         char *current = s;
         char *next_sep = strstr(current, "__");

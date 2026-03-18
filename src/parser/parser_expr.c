@@ -7985,7 +7985,9 @@ ASTNode *parse_tuple_expression(ParserContext *ctx, Lexer *l, const char *type_n
         }
         register_tuple(ctx, sig);
         char tuple_name[1024 + 16];
-        snprintf(tuple_name, sizeof(tuple_name), "Tuple_%s", sig);
+        char *clean_sig = sanitize_mangled_name(sig);
+        snprintf(tuple_name, sizeof(tuple_name), "Tuple_%s", clean_sig);
+        free(clean_sig);
         n->resolved_type = xstrdup(tuple_name);
     }
     return n;

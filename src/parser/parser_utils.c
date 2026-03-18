@@ -1093,7 +1093,9 @@ void register_tuple(ParserContext *ctx, const char *sig)
     ctx->used_tuples = n;
 
     char struct_name[1024];
-    sprintf(struct_name, "Tuple_%s", sig);
+    char *clean_sig = sanitize_mangled_name(sig);
+    sprintf(struct_name, "Tuple_%s", clean_sig);
+    free(clean_sig);
 
     ASTNode *s_def = ast_create(NODE_STRUCT);
     s_def->strct.name = xstrdup(struct_name);
