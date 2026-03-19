@@ -6942,6 +6942,29 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                     s->is_moved = 0;
                 }
             }
+
+            // 4. Trait Object Wrapping for Assignment
+            if (lhs->type == NODE_EXPR_VAR)
+            {
+                char *lhs_type_str = find_symbol_type(ctx, lhs->var_ref.name);
+                if (lhs_type_str && is_trait(lhs_type_str) && rhs && rhs->type == NODE_EXPR_UNARY &&
+                    strcmp(rhs->unary.op, "&") == 0 && rhs->unary.operand->type == NODE_EXPR_VAR)
+                {
+                    char *var_ref_name = rhs->unary.operand->var_ref.name;
+                    char *struct_type = find_symbol_type(ctx, var_ref_name);
+                    if (struct_type)
+                    {
+                        char *code = xmalloc(512);
+                        sprintf(code, "(%s){.self=&%s, .vtable=&%s_%s_VTable}", lhs_type_str,
+                                var_ref_name, struct_type, lhs_type_str);
+                        ASTNode *wrapper = ast_create(NODE_RAW_STMT);
+                        wrapper->token = rhs->token;
+                        wrapper->raw_stmt.content = code;
+                        bin->binary.right = wrapper;
+                        rhs = wrapper;
+                    }
+                }
+            }
         }
         else // All other binary ops (including +=, -=, etc. which read LHS first)
         {

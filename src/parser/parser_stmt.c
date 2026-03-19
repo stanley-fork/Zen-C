@@ -120,7 +120,7 @@ static void auto_import_std_slice(ParserContext *ctx)
 
     // Save and restore filename context
     char *saved_fn = g_current_filename;
-    g_current_filename = resolved_path;
+    g_current_filename = xstrdup(resolved_path);
 
     // Parse the slice module contents
     parse_program_nodes(ctx, &i);
