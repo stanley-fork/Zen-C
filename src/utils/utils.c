@@ -92,6 +92,23 @@ char *xstrdup(const char *s)
     return d;
 }
 
+char *sanitize_path_for_c_string(const char *path)
+{
+    if (!path)
+    {
+        return NULL;
+    }
+    char *sanitized = xstrdup(path);
+    for (int i = 0; sanitized[i]; i++)
+    {
+        if (sanitized[i] == '\\')
+        {
+            sanitized[i] = '/';
+        }
+    }
+    return sanitized;
+}
+
 char *load_file(const char *fn)
 {
     FILE *f = fopen(fn, "rb");

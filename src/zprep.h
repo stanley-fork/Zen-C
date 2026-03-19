@@ -165,6 +165,11 @@ char *xstrdup(const char *s) __attribute__((returns_nonnull));
  */
 char *load_file(const char *filename);
 
+/**
+ * @brief Sanitize file path for C string literals (converts \ to /).
+ */
+char *sanitize_path_for_c_string(const char *path);
+
 // ** Buffer Size Constants **
 #define MAX_FLAGS_SIZE 1024
 #define MAX_PATH_SIZE 1024

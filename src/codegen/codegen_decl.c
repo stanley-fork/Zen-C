@@ -1651,5 +1651,6 @@ void emit_source_mapping(ASTNode *node, FILE *out)
     last_source_mapping_line = node->token.line;
     last_source_mapping_type = node->type;
 
-    fprintf(out, "\n#line %i \"%s\"\n", node->token.line, node->token.file);
+    char *safe_file = sanitize_path_for_c_string(node->token.file);
+    fprintf(out, "\n#line %i \"%s\"\n", node->token.line, safe_file);
 }
