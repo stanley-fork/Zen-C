@@ -2274,7 +2274,15 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
             {
                 if (isdigit(clean_expr[0]) || clean_expr[0] == '-')
                 {
-                    format_spec = "%d";
+                    if (strchr(clean_expr, '.') || strchr(clean_expr, 'e') ||
+                        strchr(clean_expr, 'E'))
+                    {
+                        format_spec = "%f";
+                    }
+                    else
+                    {
+                        format_spec = "%d";
+                    }
                 }
                 else if (clean_expr[0] == '"')
                 {

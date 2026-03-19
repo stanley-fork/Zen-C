@@ -399,7 +399,7 @@ Token lexer_next(Lexer *l)
         if (!is_hex && !is_bin && !is_oct)
         {
             int is_float = 0;
-            if (s[len] == '.')
+            if (s[len] == '.' && isdigit(s[len + 1]))
             {
                 if (s[len + 1] != '.')
                 {

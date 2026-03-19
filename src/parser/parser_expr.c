@@ -1534,6 +1534,23 @@ static int is_valid_int_suffix(const char *s)
     return 0;
 }
 
+static int is_valid_float_suffix(const char *s)
+{
+    if (!s || !*s)
+    {
+        return 1;
+    }
+    const char *valid[] = {"f", "F", "d", "D", NULL};
+    for (int i = 0; valid[i]; i++)
+    {
+        if (strcmp(s, valid[i]) == 0)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // Parse integer literal (decimal, hex, binary, octal)
 static ASTNode *parse_int_literal(Token t)
 {
@@ -1607,6 +1624,24 @@ static ASTNode *parse_float_literal(Token t)
 
     node->literal.float_val = atof(s);
     node->type_info = type_new(TYPE_F64);
+
+    // Check for suffix
+    char *endptr = NULL;
+    strtod(s, &endptr);
+    if (endptr && *endptr)
+    {
+        if (!is_valid_float_suffix(endptr))
+        {
+            char err[256];
+            snprintf(err, sizeof(err), "Invalid float literal suffix: '%s'", endptr);
+            zpanic_at(t, err);
+        }
+        if (strcmp(endptr, "f") == 0 || strcmp(endptr, "F") == 0)
+        {
+            node->type_info->kind = TYPE_F32;
+        }
+    }
+
     free(s);
     return node;
 }

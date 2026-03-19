@@ -4762,6 +4762,18 @@ const char *normalize_type_name(const char *name)
     {
         return "char*";
     }
+    if (strcmp(name, "f32") == 0 || strcmp(name, "float") == 0)
+    {
+        return "float";
+    }
+    if (strcmp(name, "f64") == 0 || strcmp(name, "double") == 0)
+    {
+        return "double";
+    }
+    if (strcmp(name, "f128") == 0)
+    {
+        return "__float128";
+    }
 
     return name;
 }
