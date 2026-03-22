@@ -227,6 +227,8 @@ typedef struct
     int json_output;     ///< 1 if --json (emit structured JSON diagnostics).
     int use_typecheck;   ///< 1 if --check (enable manual semantic analysis).
     int warn_as_errors;  ///< 1 if --warn-errors or -Werror (treat Zen C warnings as errors).
+    int no_suppress_warnings; ///< 1 if --no-suppress-warnings (disable default C warning
+                              ///< suppressions).
 
     int keep_comments; ///< 1 if --keep-comments (preserve comments in output).
 

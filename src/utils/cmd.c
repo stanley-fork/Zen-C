@@ -27,59 +27,122 @@ void print_version()
     printf(COLOR_BOLD "zc" COLOR_RESET " %s\n", ZEN_VERSION);
 }
 
+static int get_visible_length(const char *str)
+{
+    int len = 0;
+    const char *p = str;
+    while (*p)
+    {
+        if (*p == '\033' && *(p + 1) == '[')
+        {
+            p += 2;
+            while (*p && *p != 'm')
+            {
+                p++;
+            }
+            if (*p == 'm')
+            {
+                p++;
+            }
+        }
+        else
+        {
+            len++;
+            p++;
+        }
+    }
+    return len;
+}
+
+static void print_help_item(const char *option, const char *description)
+{
+    printf("  %s", option);
+    int visible_len = get_visible_length(option) + 2; // +2 for the leading spaces
+    int target_col = 30;
+
+    if (visible_len >= target_col - 1)
+    {
+        printf("\n%-*s", target_col, "");
+    }
+    else
+    {
+        for (int i = 0; i < target_col - visible_len; i++)
+        {
+            putchar(' ');
+        }
+    }
+    printf("%s\n", description);
+}
+
 void print_usage()
 {
     printf(COLOR_BOLD "Zen C" COLOR_RESET " - The language of monks\n\n");
-    printf(COLOR_BOLD "Usage:" COLOR_RESET
-                      " zc [command] [options] <file.zc> [extra files...]\n\n");
-    printf(COLOR_BOLD COLOR_YELLOW "Commands:" COLOR_RESET "\n");
-    printf("  " COLOR_GREEN "run" COLOR_RESET "          Compile and run the program\n");
-    printf("  " COLOR_GREEN "build" COLOR_RESET "        Compile to executable\n");
-    printf("  " COLOR_GREEN "check" COLOR_RESET "        Check for errors only\n");
-    printf("  " COLOR_GREEN "repl" COLOR_RESET "         Start Interactive REPL\n");
-    printf("  " COLOR_GREEN "transpile" COLOR_RESET
-           "    Transpile to C code only (no compilation)\n");
-    printf("  " COLOR_GREEN "lsp" COLOR_RESET "          Start Language Server\n");
-    printf("\n" COLOR_BOLD COLOR_YELLOW "Options:" COLOR_RESET "\n");
-    printf("  " COLOR_CYAN "-o" COLOR_RESET " <file>       Output executable name\n");
-    printf("  " COLOR_CYAN "-O" COLOR_RESET "<level>       Optimization level\n");
-    printf("  " COLOR_CYAN "-g" COLOR_RESET "              Debug info (default)\n");
-    printf("  " COLOR_CYAN "-g0" COLOR_RESET ", " COLOR_CYAN "--no-debug" COLOR_RESET
-           "    Disable debug info\n");
-    printf("  " COLOR_CYAN "--release" COLOR_RESET "         Release mode (no-debug + -O3)\n");
-    printf("  " COLOR_CYAN "-c" COLOR_RESET "              Compile only (produce .o)\n");
-    printf("  " COLOR_CYAN "-v" COLOR_RESET ", " COLOR_CYAN "--verbose" COLOR_RESET
-           "   Verbose output\n");
-    printf("  " COLOR_CYAN "-q" COLOR_RESET ", " COLOR_CYAN "--quiet" COLOR_RESET
-           "     Quiet output\n");
-    printf("  " COLOR_CYAN "-I" COLOR_RESET " <dir>        Add directory to include search path\n");
-    printf("  " COLOR_CYAN "-L" COLOR_RESET " <dir>        Add directory to library search path\n");
-    printf("  " COLOR_CYAN "-l" COLOR_RESET " <lib>        Link to a library\n");
-    printf("  " COLOR_CYAN "-D" COLOR_RESET " <name>[=val] Define macro\n");
-    printf("  " COLOR_CYAN "-W" COLOR_RESET "<warn>       Pass warning flag to C compiler\n");
-    printf("  " COLOR_CYAN "-f" COLOR_RESET "<feat>       Pass feature flag to C compiler\n");
-    printf("  " COLOR_CYAN "-m" COLOR_RESET "<arch>       Pass architecture flag to C compiler\n");
-    printf("  " COLOR_CYAN "-x" COLOR_RESET
-           "<lang>       Specify expected input language to C compiler\n");
-    printf("  " COLOR_CYAN "-S" COLOR_RESET
-           "              Produce assembly instead of executable\n");
-    printf("  " COLOR_CYAN "-E" COLOR_RESET "              Preprocess only\n");
-    printf("  " COLOR_CYAN "-shared" COLOR_RESET "         Produce a shared library\n");
-    printf("  " COLOR_CYAN "--emit-c" COLOR_RESET "        Keep generated C file (out.c)\n");
-    printf("  " COLOR_CYAN "--keep-comments" COLOR_RESET " Preserve comments in output C\n");
-    printf("  " COLOR_CYAN "--freestanding" COLOR_RESET "  Freestanding mode (no stdlib)\n");
-    printf("  " COLOR_CYAN "--cc" COLOR_RESET
-           " <compiler> C compiler to use (gcc, clang, tcc, zig)\n");
-    printf("  " COLOR_CYAN "--check" COLOR_RESET
-           "         Enable semantic analysis (types, borrows, moves)\n");
-    printf("  " COLOR_CYAN "--json" COLOR_RESET "          Emit diagnostics as JSON\n");
-    printf("  " COLOR_CYAN "--zen" COLOR_RESET "           Enable Zen facts\n");
-    printf("  " COLOR_CYAN "--cpp" COLOR_RESET "           Use C++ mode\n");
-    printf("  " COLOR_CYAN "--objective-c" COLOR_RESET "   Use Objective-C mode\n");
-    printf("  " COLOR_CYAN "--cuda" COLOR_RESET "          Use CUDA mode (requires nvcc)\n");
-    printf("  " COLOR_CYAN "--help" COLOR_RESET "          Print this help message\n");
-    printf("  " COLOR_CYAN "--paths" COLOR_RESET "         Print library search paths\n");
-    printf("  " COLOR_CYAN "--version" COLOR_RESET "       Print version information\n");
+    printf(COLOR_BOLD "USAGE:" COLOR_RESET " zc [COMMAND] [OPTIONS] [FILES...]\n\n");
+    printf("A modern, high-performance C transpiler with advanced features.\n\n");
+
+    printf(COLOR_BOLD "COMMANDS:" COLOR_RESET "\n");
+    print_help_item(COLOR_GREEN "run" COLOR_RESET, "Compile and execute the program immediately");
+    print_help_item(COLOR_GREEN "build" COLOR_RESET, "Compile to a standalone executable");
+    print_help_item(COLOR_GREEN "check" COLOR_RESET, "Perform syntax and type checking only");
+    print_help_item(COLOR_GREEN "repl" COLOR_RESET, "Start the interactive REPL shell");
+    print_help_item(COLOR_GREEN "transpile" COLOR_RESET, "Generate C code without compilation");
+    print_help_item(COLOR_GREEN "lsp" COLOR_RESET, "Start the Language Server (LSP)");
+
+    printf("\n" COLOR_BOLD "GENERAL OPTIONS:" COLOR_RESET "\n");
+    print_help_item(COLOR_CYAN "-o" COLOR_RESET " <file>", "Set the output executable name");
+    print_help_item(COLOR_CYAN "-I" COLOR_RESET " <dir>", "Add directory to include search path");
+    print_help_item(COLOR_CYAN "-L" COLOR_RESET " <dir>", "Add directory to library search path");
+    print_help_item(COLOR_CYAN "-l" COLOR_RESET " <lib>", "Link against a specific library");
+    print_help_item(COLOR_CYAN "-D" COLOR_RESET " <name>[=val]", "Define a preprocessor macro");
+    print_help_item(COLOR_CYAN "--cc" COLOR_RESET " <compiler>",
+                    "Specify the backend C compiler (gcc, clang, tcc)");
+
+    printf("\n" COLOR_BOLD "BUILD & OPTIMIZATION:" COLOR_RESET "\n");
+    print_help_item(COLOR_CYAN "-O" COLOR_RESET "<level>", "Set optimization level (0-3)");
+    print_help_item(COLOR_CYAN "-g" COLOR_RESET, "Include debug information (default)");
+    print_help_item(COLOR_CYAN "-g0" COLOR_RESET ", " COLOR_CYAN "--no-debug" COLOR_RESET,
+                    "Disable debug information");
+    print_help_item(COLOR_CYAN "--release" COLOR_RESET, "Enable release mode (no-debug + -O3)");
+    print_help_item(COLOR_CYAN "-c" COLOR_RESET, "Compile only; do not link");
+    print_help_item(COLOR_CYAN "-S" COLOR_RESET, "Produce assembly code instead of executable");
+    print_help_item(COLOR_CYAN "-E" COLOR_RESET, "Preprocess the source files only");
+    print_help_item(COLOR_CYAN "-shared" COLOR_RESET, "Create a shared library (.so, .dll)");
+
+    printf("\n" COLOR_BOLD "LANGUAGE & SEMANTICS:" COLOR_RESET "\n");
+    print_help_item(COLOR_CYAN "--check" COLOR_RESET,
+                    "Enable full semantic analysis (borrow/move checker)");
+    print_help_item(COLOR_CYAN "--cpp" COLOR_RESET, "Enable C++ compatibility mode");
+    print_help_item(COLOR_CYAN "--objective-c" COLOR_RESET,
+                    "Enable Objective-C compatibility mode");
+    print_help_item(COLOR_CYAN "--cuda" COLOR_RESET,
+                    "Enable CUDA compatibility mode (requires nvcc)");
+    print_help_item(COLOR_CYAN "--freestanding" COLOR_RESET,
+                    "Enable freestanding mode (no standard library)");
+
+    printf("\n" COLOR_BOLD "OUTPUT & DEBUGGING:" COLOR_RESET "\n");
+    print_help_item(COLOR_CYAN "-v" COLOR_RESET ", " COLOR_CYAN "--verbose" COLOR_RESET,
+                    "Display verbose compilation output");
+    print_help_item(COLOR_CYAN "-q" COLOR_RESET ", " COLOR_CYAN "--quiet" COLOR_RESET,
+                    "Suppress all non-essential output");
+    print_help_item(COLOR_CYAN "--json" COLOR_RESET, "Emit compilation diagnostics in JSON format");
+    print_help_item(COLOR_CYAN "--no-suppress-warnings" COLOR_RESET,
+                    "Display all default C backend warnings");
+    print_help_item(COLOR_CYAN "--emit-c" COLOR_RESET, "Keep the generated C source files");
+    print_help_item(COLOR_CYAN "--keep-comments" COLOR_RESET,
+                    "Preserve comments in the generated C code");
+
+    printf("\n" COLOR_BOLD "ADVANCED C-BACKEND OPTIONS:" COLOR_RESET "\n");
+    print_help_item(COLOR_CYAN "-W" COLOR_RESET "<warn>", "Forward warning flag to C compiler");
+    print_help_item(COLOR_CYAN "-f" COLOR_RESET "<feat>", "Forward feature flag to C compiler");
+    print_help_item(COLOR_CYAN "-m" COLOR_RESET "<arch>",
+                    "Forward architecture flag to C compiler");
+    print_help_item(COLOR_CYAN "-x" COLOR_RESET "<lang>", "Specify input language to C compiler");
+
+    printf("\n" COLOR_BOLD "INFO & MISC:" COLOR_RESET "\n");
+    print_help_item(COLOR_CYAN "--help" COLOR_RESET, "Display this help message and exit");
+    print_help_item(COLOR_CYAN "--paths" COLOR_RESET, "Display library search paths");
+    print_help_item(COLOR_CYAN "--version" COLOR_RESET, "Display version information and exit");
+    print_help_item(COLOR_CYAN "--zen" COLOR_RESET, "Display Zen facts and easter eggs");
 }
 
 void build_compile_arg_list(ArgList *list, const char *outfile, const char *temp_source_file)
@@ -90,6 +153,19 @@ void build_compile_arg_list(ArgList *list, const char *outfile, const char *temp
     // GCC Flags
     arg_list_add_from_string(list, g_config.gcc_flags);
     arg_list_add_from_string(list, g_cflags);
+
+    // Suppress warnings triggered by transpiled code
+    if (!g_config.no_suppress_warnings)
+    {
+        arg_list_add(list, "-Wno-parentheses");
+        arg_list_add(list, "-Wno-unused-value");
+        arg_list_add(list, "-Wno-unused-variable");
+        arg_list_add(list, "-Wno-unused-parameter");
+        arg_list_add(list, "-Wno-unused-function");
+        arg_list_add(list, "-Wno-unused-but-set-variable");
+        arg_list_add(list, "-Wno-sign-compare");
+        arg_list_add(list, "-Wno-missing-field-initializers");
+    }
 
     // Freestanding
     if (g_config.is_freestanding)

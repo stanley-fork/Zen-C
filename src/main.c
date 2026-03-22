@@ -209,6 +209,10 @@ int main(int argc, char **argv)
         {
             g_config.warn_as_errors = 1;
         }
+        else if (strcmp(arg, "--no-suppress-warnings") == 0)
+        {
+            g_config.no_suppress_warnings = 1;
+        }
         else if (strcmp(arg, "--cpp") == 0)
         {
             if (z_is_windows())
