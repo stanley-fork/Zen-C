@@ -71,6 +71,7 @@ void emit_type_aliases(ASTNode *node, FILE *out);
 void emit_global_aliases(ParserContext *ctx, FILE *out);
 void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out);
 void emit_trait_defs(ASTNode *node, FILE *out);
+void emit_trait_wrappers(ASTNode *node, FILE *out);
 void emit_enum_protos(ParserContext *ctx, ASTNode *node, FILE *out);
 void emit_globals(ParserContext *ctx, ASTNode *node, FILE *out);
 void emit_lambda_defs(ParserContext *ctx, FILE *out);

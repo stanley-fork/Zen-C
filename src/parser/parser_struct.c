@@ -160,12 +160,13 @@ ASTNode *parse_trait(ParserContext *ctx, Lexer *l)
                                             &arg_types, &param_names, &is_varargs, NULL);
 
         char *ret = xstrdup("void");
+        Type *ret_type_obj = type_new(TYPE_VOID);
         if (lexer_peek(l).type == TOK_ARROW)
         {
             lexer_next(l);
-            char *rt = parse_type(ctx, l);
+            ret_type_obj = parse_type_formal(ctx, l);
             free(ret);
-            ret = rt;
+            ret = type_to_string(ret_type_obj);
         }
 
         if (lexer_peek(l).type == TOK_SEMICOLON)
@@ -181,6 +182,7 @@ ASTNode *parse_trait(ParserContext *ctx, Lexer *l)
             m->func.arg_count = arg_count;
             m->func.arg_types = arg_types;
             m->func.ret_type = ret;
+            m->func.ret_type_info = ret_type_obj;
             m->func.body = NULL;
             if (!methods)
             {

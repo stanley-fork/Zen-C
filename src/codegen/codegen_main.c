@@ -735,6 +735,42 @@ void codegen_node(ParserContext *ctx, ASTNode *node, FILE *out)
             }
         }
 
+        emit_trait_wrappers(kids, out);
+
+        if (ctx->parsed_globals_list)
+        {
+            StructRef *trait_ref_wrappers = ctx->parsed_globals_list;
+            while (trait_ref_wrappers)
+            {
+                if (trait_ref_wrappers->node && trait_ref_wrappers->node->type == NODE_TRAIT)
+                {
+                    // Check if this trait was already in kids (explicitly imported)
+                    int already_in_kids = 0;
+                    ASTNode *k_inner = kids;
+                    while (k_inner)
+                    {
+                        if (k_inner->type == NODE_TRAIT && k_inner->trait.name &&
+                            trait_ref_wrappers->node->trait.name &&
+                            strcmp(k_inner->trait.name, trait_ref_wrappers->node->trait.name) == 0)
+                        {
+                            already_in_kids = 1;
+                            break;
+                        }
+                        k_inner = k_inner->next;
+                    }
+
+                    if (!already_in_kids)
+                    {
+                        ASTNode *saved_next = trait_ref_wrappers->node->next;
+                        trait_ref_wrappers->node->next = NULL;
+                        emit_trait_wrappers(trait_ref_wrappers->node, out);
+                        trait_ref_wrappers->node->next = saved_next;
+                    }
+                }
+                trait_ref_wrappers = trait_ref_wrappers->next;
+            }
+        }
+
         emit_protos(ctx, merged_funcs, out);
 
         emit_impl_vtables(ctx, out);

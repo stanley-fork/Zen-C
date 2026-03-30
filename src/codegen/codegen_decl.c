@@ -980,7 +980,34 @@ void emit_trait_defs(ASTNode *node, FILE *out)
             fprintf(out, "typedef struct %s { void *self; %s_VTable *vtable; } %s;\n",
                     node->trait.name, node->trait.name, node->trait.name);
 
-            m = node->trait.methods;
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
+            }
+            fprintf(out, "\n");
+        }
+        node = node->next;
+    }
+}
+
+// Emit trait wrapper functions.
+void emit_trait_wrappers(ASTNode *node, FILE *out)
+{
+    while (node)
+    {
+        if (node->type == NODE_TRAIT)
+        {
+            if (node->trait.generic_param_count > 0)
+            {
+                node = node->next;
+                continue;
+            }
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", node->cfg_condition);
+            }
+
+            ASTNode *m = node->trait.methods;
             while (m)
             {
                 const char *orig = parse_original_method_name(m->func.name);

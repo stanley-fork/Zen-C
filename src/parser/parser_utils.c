@@ -1264,6 +1264,25 @@ ASTNode *find_struct_def(ParserContext *ctx, const char *name)
     return NULL;
 }
 
+ASTNode *find_trait_def(ParserContext *ctx, const char *name)
+{
+    if (!ctx || !name)
+    {
+        return NULL;
+    }
+
+    StructRef *r = ctx->parsed_globals_list;
+    while (r)
+    {
+        if (r->node && r->node->type == NODE_TRAIT && strcmp(r->node->trait.name, name) == 0)
+        {
+            return r->node;
+        }
+        r = r->next;
+    }
+    return NULL;
+}
+
 ASTNode *find_concrete_struct_def(ParserContext *ctx, const char *name)
 {
     Instantiation *i = ctx->instantiations;

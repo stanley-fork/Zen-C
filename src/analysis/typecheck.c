@@ -10,6 +10,7 @@
 char *resolve_struct_name_from_type(ParserContext *ctx, Type *t, int *is_ptr_out,
                                     char **allocated_out);
 FuncSig *find_func(ParserContext *ctx, const char *name);
+ASTNode *find_trait_def(ParserContext *ctx, const char *name);
 
 // ** Internal Helpers **
 
@@ -590,6 +591,30 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node)
             func_name = node->call.callee->type_info->name;
             sig = find_func(tc->pctx, func_name);
         }
+
+        // Trait method resolution fallback
+        if (!sig && node->call.callee->member.target && node->call.callee->member.target->type_info)
+        {
+            Type *target_type = get_inner_type(node->call.callee->member.target->type_info);
+            if (target_type->name && is_trait(target_type->name))
+            {
+                ASTNode *trait_def = find_trait_def(tc->pctx, target_type->name);
+                if (trait_def)
+                {
+                    ASTNode *method = trait_def->trait.methods;
+                    while (method)
+                    {
+                        if (strcmp(method->func.name, node->call.callee->member.field) == 0)
+                        {
+                            // Correctly resolve return type for trait method
+                            node->type_info = method->func.ret_type_info;
+                            break;
+                        }
+                        method = method->next;
+                    }
+                }
+            }
+        }
     }
 
     // Count arguments
@@ -760,6 +785,14 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node)
     if (sig && sig->ret_type && !node->type_info)
     {
         node->type_info = sig->ret_type;
+    }
+    else if (!node->type_info && node->call.callee && node->call.callee->type_info)
+    {
+        Type *callee_t = get_inner_type(node->call.callee->type_info);
+        if (callee_t->kind == TYPE_FUNCTION && callee_t->inner)
+        {
+            node->type_info = callee_t->inner;
+        }
     }
 }
 
@@ -1954,7 +1987,6 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         if (node->member.target && node->member.target->type_info)
         {
             Type *target_type = get_inner_type(node->member.target->type_info);
-            // 1. Look up struct field type
             if (target_type->kind == TYPE_STRUCT && target_type->name)
             {
                 ASTNode *struct_def = find_struct_def(tc->pctx, target_type->name);
@@ -1974,7 +2006,6 @@ static void check_node(TypeChecker *tc, ASTNode *node)
                 }
             }
 
-            // 2. If not a field, try to resolve as a method
             if (!node->type_info)
             {
                 int is_ptr = 0;
