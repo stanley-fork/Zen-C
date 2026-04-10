@@ -261,4 +261,7 @@ test-asan: clean asan
 	ASAN_OPTIONS=detect_leaks=0 ./tests/scripts/run_codegen_tests.sh
 	ASAN_OPTIONS=detect_leaks=0 ./tests/scripts/run_example_transpile.sh
 
-.PHONY: all clean install uninstall install-ape uninstall-ape test zig clang ape windows asan test-asan
+test-plugins: $(TARGET) $(PLUGINS)
+	./zc run tests/plugins_suite.zc
+
+.PHONY: all clean install uninstall install-ape uninstall-ape test zig clang ape windows asan test-asan test-plugins

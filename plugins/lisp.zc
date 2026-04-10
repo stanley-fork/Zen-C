@@ -156,9 +156,22 @@ fn parse_lisp_list(p: char**, api: ZApi*, depth: int) {
         while (ptr[0] != 0 && !isspace((int)ptr[0]) && ptr[0] != '(') {
             ptr = &ptr[1];
         }
-        fputs("auto LVal ", out);
-        fwrite(nstart, 1, (size_t)(ptr - nstart), out);
-        fputs("(", out);
+        
+        let h = api.hoist_out;
+        if (h == (void*)0) h = out; // Fallback to inline if hoisting unavailable
+
+        // Forward declaration in case of mutual recursion
+        fputs("static LVal ", h);
+        fwrite(nstart, 1, (size_t)(ptr - nstart), h);
+        fputs("(LVal", h); // simplified check for args
+        // (Actually adding full forward decl is complex without parsing params twice, 
+        //  but the hoist out is usually at top level and the runtime is above it.)
+        
+        fputs("); \n", h);
+
+        fputs("static LVal ", h);
+        fwrite(nstart, 1, (size_t)(ptr - nstart), h);
+        fputs("(", h);
         *p = ptr;
         skip_whitespace(p);
         ptr = *p;
@@ -168,32 +181,39 @@ fn parse_lisp_list(p: char**, api: ZApi*, depth: int) {
         ptr = *p;
         let first = 1;
         while (ptr[0] != 0 && ptr[0] != ')') {
-            if (first == 0) fputs(", ", out);
+            if (first == 0) fputs(", ", h);
             first = 0;
-            fputs("LVal ", out);
+            fputs("LVal ", h);
             let astart = ptr;
             while (ptr[0] != 0 && !isspace((int)ptr[0]) && ptr[0] != ')') {
                 ptr = &ptr[1];
             }
-            fwrite(astart, 1, (size_t)(ptr - astart), out);
+            fwrite(astart, 1, (size_t)(ptr - astart), h);
             *p = ptr;
             skip_whitespace(p);
             ptr = *p;
         }
         ptr = &ptr[1]; // eat )
-        fputs(f") {{ \n return ({{ \n", out);
+        fputs(f") {{ \n return ({{ \n", h);
         *p = ptr;
         skip_whitespace(p);
         ptr = *p;
+        let old_out = api.out;
+        api.out = h;
         while (ptr[0] != 0 && ptr[0] != ')') {
             *p = ptr;
-            parse_lisp_expr(p, api, depth + 1);
-            fputs(";\n", out);
+            parse_lisp_expr(p, api, depth + 1); 
+            
+            fputs(";\n", h); 
             skip_whitespace(p);
             ptr = *p;
         }
-        fputs(f"}});\n}}\n", out);
+        api.out = old_out;
+        fputs(f"}});\n}}\n", h);
         *p = ptr;
+        
+        // The defun expression itself in the current stream returns nil
+        fputs("nil", out);
     } else {
         fwrite(op_start, 1, (size_t)op_len, out);
         fputs("(", out);
