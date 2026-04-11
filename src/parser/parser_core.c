@@ -463,6 +463,40 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
             l->emit_comments = 0;
         }
 
+        // Fault-tolerant recovery: if a sub-parser encountered an error and
+        // returned (instead of exit()ing), skip tokens until we find a likely
+        // top-level keyword so we can resume parsing cleanly.
+        if (ctx->is_fault_tolerant && ctx->had_error)
+        {
+            ctx->had_error = 0;
+            while (1)
+            {
+                Token recovery = lexer_peek(l);
+                if (recovery.type == TOK_EOF)
+                {
+                    return h;
+                }
+                // Resync on tokens that typically start top-level declarations
+                if (recovery.type == TOK_IDENT)
+                {
+                    if ((recovery.len == 2 && strncmp(recovery.start, "fn", 2) == 0) ||
+                        (recovery.len == 6 && strncmp(recovery.start, "struct", 6) == 0) ||
+                        (recovery.len == 4 && strncmp(recovery.start, "enum", 4) == 0) ||
+                        (recovery.len == 4 && strncmp(recovery.start, "impl", 4) == 0) ||
+                        (recovery.len == 5 && strncmp(recovery.start, "trait", 5) == 0) ||
+                        (recovery.len == 6 && strncmp(recovery.start, "import", 6) == 0) ||
+                        (recovery.len == 6 && strncmp(recovery.start, "extern", 6) == 0) ||
+                        (recovery.len == 4 && strncmp(recovery.start, "test", 4) == 0) ||
+                        (recovery.len == 5 && strncmp(recovery.start, "alias", 5) == 0))
+                    {
+                        break; // Found a top-level keyword, resume parsing
+                    }
+                }
+                lexer_next(l); // Skip this token
+            }
+            continue; // Re-enter loop with peeked top-level keyword
+        }
+
         skip_comments(l);
         Token t = lexer_peek(l);
         if (t.type == TOK_EOF)

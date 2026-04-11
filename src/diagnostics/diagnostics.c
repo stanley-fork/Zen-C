@@ -276,6 +276,7 @@ void zpanic_at(Token t, const char *fmt, ...)
         emit_json("error", t, msg, NULL, DIAG_NONE);
         if (g_parser_ctx && g_parser_ctx->is_fault_tolerant && g_parser_ctx->on_error)
         {
+            g_parser_ctx->had_error = 1;
             g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, msg);
             return;
         }
@@ -324,6 +325,7 @@ void zpanic_at(Token t, const char *fmt, ...)
         vsnprintf(msg, sizeof(msg), fmt, args2);
         va_end(args2);
 
+        g_parser_ctx->had_error = 1;
         g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, msg);
         return; // Recover!
     }
@@ -342,6 +344,7 @@ void zpanic_with_suggestion(Token t, const char *msg, const char *suggestion)
             char full_msg[MAX_ERROR_MSG_LEN];
             snprintf(full_msg, sizeof(full_msg), "%s (Suggestion: %s)", msg,
                      suggestion ? suggestion : "");
+            g_parser_ctx->had_error = 1;
             g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
             return;
         }
@@ -385,6 +388,7 @@ void zpanic_with_suggestion(Token t, const char *msg, const char *suggestion)
         char full_msg[MAX_ERROR_MSG_LEN];
         snprintf(full_msg, sizeof(full_msg), "%s (Suggestion: %s)", msg,
                  suggestion ? suggestion : "");
+        g_parser_ctx->had_error = 1;
         g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
         return; // Recover!
     }
@@ -416,6 +420,7 @@ void zpanic_with_hints(Token t, const char *msg, const char *const *hints)
         {
             char full_msg[MAX_PATH_LEN * 2];
             snprintf(full_msg, sizeof(full_msg), "%s\n%s", msg, combined_hints);
+            g_parser_ctx->had_error = 1;
             g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
             return;
         }
@@ -481,6 +486,7 @@ void zpanic_with_hints(Token t, const char *msg, const char *const *hints)
         {
             strncat(full_msg, combined_hints, sizeof(full_msg) - strlen(full_msg) - 1);
         }
+        g_parser_ctx->had_error = 1;
         g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
         return; // Recover!
     }

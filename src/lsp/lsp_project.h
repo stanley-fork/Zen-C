@@ -38,6 +38,9 @@ extern LSPProject *g_project;
 // Initialize the project with a root directory
 void lsp_project_init(const char *root_path);
 
+// Perform full project indexing
+void lsp_project_index_workspace();
+
 // Find a file in the project
 ProjectFile *lsp_project_get_file(const char *uri);
 

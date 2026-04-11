@@ -929,6 +929,26 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque,
 
     while (1)
     {
+        // Fault-tolerant recovery for struct fields
+        if (ctx->is_fault_tolerant && ctx->had_error)
+        {
+            ctx->had_error = 0;
+            while (1)
+            {
+                Token r = lexer_peek(l);
+                if (r.type == TOK_EOF || r.type == TOK_RBRACE || r.type == TOK_SEMICOLON)
+                {
+                    if (r.type == TOK_SEMICOLON)
+                    {
+                        lexer_next(l);
+                    }
+                    break;
+                }
+                lexer_next(l);
+            }
+            continue;
+        }
+
         skip_comments(l);
         Token t = lexer_peek(l);
 

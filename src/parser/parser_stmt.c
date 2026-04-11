@@ -135,7 +135,15 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
     Token t_brace = lexer_next(l);
     if (t_brace.type != TOK_LBRACE)
     {
-        zpanic_at(t_brace, "Expected { in match");
+        zpanic_at(t_brace, "Expected '{' in match");
+        if (ctx->is_fault_tolerant)
+        {
+            ASTNode *node = ast_create(NODE_MATCH);
+            node->token = start_token;
+            node->match_stmt.expr = expr;
+            node->match_stmt.cases = NULL;
+            return node;
+        }
     }
 
     ASTNode *h = 0, *tl = 0;
@@ -3409,9 +3417,28 @@ ASTNode *parse_block(ParserContext *ctx, Lexer *l)
     ASTNode *head = 0, *tail = 0;
     Token t = lexer_peek(l);
     int unreachable = 0;
-
     while (1)
     {
+        // Granular resync: if a statement sub-parser failed, skip until ';' or '}'
+        if (ctx->is_fault_tolerant && ctx->had_error)
+        {
+            ctx->had_error = 0;
+            while (1)
+            {
+                Token r = lexer_peek(l);
+                if (r.type == TOK_EOF || r.type == TOK_RBRACE || r.type == TOK_SEMICOLON)
+                {
+                    if (r.type == TOK_SEMICOLON)
+                    {
+                        lexer_next(l); // consume the semicolon
+                    }
+                    break;
+                }
+                lexer_next(l);
+            }
+            continue;
+        }
+
         skip_comments(l);
         Token tk = lexer_peek(l);
         if (tk.type == TOK_RBRACE)

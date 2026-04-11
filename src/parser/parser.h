@@ -325,8 +325,9 @@ struct ParserContext
     DeprecatedFunc *deprecated_funcs; ///< Registry of deprecated functions.
 
     // LSP / Fault Tolerance
-    int is_fault_tolerant;     ///< 1 if parser should recover from errors (LSP mode).
-    void *error_callback_data; ///< User data for error callback.
+    int is_fault_tolerant; ///< 1 if parser should recover from errors (LSP mode).
+    int had_error; ///< Set by zpanic_at when fault-tolerant; checked by parser loops to bail out.
+    void *error_callback_data;                              ///< User data for error callback.
     void (*on_error)(void *data, Token t, const char *msg); ///< Callback for reporting errors.
     void (*on_diagnostic)(void *data, Token t, int severity, const char *msg,
                           int diag_id); ///< Unified diagnostic callback

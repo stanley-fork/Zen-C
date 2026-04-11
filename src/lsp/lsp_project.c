@@ -7,8 +7,15 @@
 #include <sys/stat.h>
 
 LSPProject *g_project = NULL;
+static int g_is_indexing = 0;
 
 static void scan_dir(const char *dir_path);
+
+// Initialize the project with a root directory
+void lsp_project_init(const char *root_path);
+
+// Perform full project indexing
+void lsp_project_index_workspace();
 
 void lsp_project_init(const char *root_path)
 {
@@ -30,9 +37,20 @@ void lsp_project_init(const char *root_path)
     // to prevent exit(1) during initial scan.
     void lsp_default_on_error(void *data, Token t, const char *msg);
     g_project->ctx->on_error = lsp_default_on_error;
+}
+
+void lsp_project_index_workspace()
+{
+    if (!g_project || !g_project->root_path)
+    {
+        return;
+    }
 
     // Scan workspace
-    scan_dir(root_path);
+    g_is_indexing = 1;
+    scan_dir(g_project->root_path);
+    g_is_indexing = 0;
+    fprintf(stderr, "zls: Project indexing complete\n");
 }
 
 // Default error handler for indexing phase
@@ -178,32 +196,36 @@ void lsp_project_update_file(const char *uri, const char *src)
 
     // Reset parser context globals so that imports don't trigger redefinition errors
     // from previously indexed files in the workspace.
-    g_project->ctx->struct_defs = NULL;
-    g_project->ctx->parsed_structs_list = NULL;
-    g_project->ctx->parsed_enums_list = NULL;
-    g_project->ctx->parsed_funcs_list = NULL;
-    g_project->ctx->parsed_impls_list = NULL;
-    g_project->ctx->parsed_globals_list = NULL;
-    g_project->ctx->enum_variants = NULL;
-    g_project->ctx->registered_impls = NULL;
-    g_project->ctx->used_slices = NULL;
-    g_project->ctx->used_tuples = NULL;
-    g_project->ctx->type_aliases = NULL;
-    g_project->ctx->modules = NULL;
-    g_project->ctx->imported_files = NULL;
-    g_project->ctx->selective_imports = NULL;
-    g_project->ctx->templates = NULL;
-    g_project->ctx->func_templates = NULL;
-    g_project->ctx->impl_templates = NULL;
-    g_project->ctx->instantiations = NULL;
-    g_project->ctx->instantiated_structs = NULL;
-    g_project->ctx->instantiated_funcs = NULL;
+    if (!g_is_indexing)
+    {
+        g_project->ctx->struct_defs = NULL;
+        g_project->ctx->parsed_structs_list = NULL;
+        g_project->ctx->parsed_enums_list = NULL;
+        g_project->ctx->parsed_funcs_list = NULL;
+        g_project->ctx->parsed_impls_list = NULL;
+        g_project->ctx->parsed_globals_list = NULL;
+        g_project->ctx->enum_variants = NULL;
+        g_project->ctx->registered_impls = NULL;
+        g_project->ctx->used_slices = NULL;
+        g_project->ctx->used_tuples = NULL;
+        g_project->ctx->type_aliases = NULL;
+        g_project->ctx->modules = NULL;
+        g_project->ctx->imported_files = NULL;
+        g_project->ctx->selective_imports = NULL;
+        g_project->ctx->templates = NULL;
+        g_project->ctx->func_templates = NULL;
+        g_project->ctx->impl_templates = NULL;
+        g_project->ctx->func_registry = NULL;
+        g_project->ctx->global_lambdas = NULL;
+    }
+    g_project->ctx->had_error = 0;
 
     if (!is_file_imported(g_project->ctx, pf->path))
     {
         mark_file_imported(g_project->ctx, pf->path);
     }
 
+    g_project->ctx->had_error = 0;
     ASTNode *root = parse_program(g_project->ctx, &l);
 
     pf->ast = root;
@@ -212,7 +234,10 @@ void lsp_project_update_file(const char *uri, const char *src)
     if (root)
     {
         lsp_build_index(pf->index, root);
-        validate_types(g_project->ctx);
+        if (!g_is_indexing)
+        {
+            validate_types(g_project->ctx);
+        }
     }
 }
 

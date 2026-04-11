@@ -126,10 +126,15 @@ void handle_request(const char *json_str)
             "\"declaration\",\"definition\",\"readonly\","
             "\"static\",\"deprecated\",\"abstract\",\"async\",\"modification\",\"documentation\","
             "\"defaultLibrary\"]},\"full\":true}"
-            "}}}}}";
+            "}}}";
 
         // Dynamically construct response with correct ID
         cJSON *res_json = cJSON_Parse(response);
+        if (!res_json)
+        {
+            fprintf(stderr, "zls: Failed to construct initialize response\n");
+            return;
+        }
         cJSON_DeleteItemFromObject(res_json, "id");
         cJSON_AddNumberToObject(res_json, "id", id);
 
@@ -139,6 +144,10 @@ void handle_request(const char *json_str)
         free(str);
         cJSON_Delete(res_json);
         fflush(stdout);
+    }
+    else if (strcmp(method, "initialized") == 0)
+    {
+        lsp_project_index_workspace();
     }
     else if (strcmp(method, "textDocument/didOpen") == 0 ||
              strcmp(method, "textDocument/didChange") == 0)

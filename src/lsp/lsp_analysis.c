@@ -39,6 +39,7 @@ static void send_json_response(cJSON *root)
     char *str = cJSON_PrintUnformatted(root);
     if (str)
     {
+        fprintf(stderr, "zls: Sent: %s\n", str);
         fprintf(stdout, "Content-Length: %zu\r\n\r\n%s", strlen(str), str);
         fflush(stdout);
         free(str);
@@ -763,6 +764,7 @@ void lsp_completion(const char *uri, int line, int col, int id)
     cJSON_AddStringToObject(root, "jsonrpc", "2.0");
     cJSON_AddNumberToObject(root, "id", id);
     cJSON *items = cJSON_CreateArray();
+    fprintf(stderr, "zls: lsp_completion for %s at %d:%d\n", uri, line, col);
 
     ASTNode *target_func = NULL;
     int best_line = -1;
@@ -939,32 +941,23 @@ void lsp_completion(const char *uri, int line, int col, int id)
                             }
                             *dst = 0;
 
-                            StructDef *sd = g_project->ctx->struct_defs;
+                            ASTNode *struct_node = find_struct_def(g_project->ctx, clean_name);
                             int found_field = 0;
-                            while (sd)
+                            if (struct_node && struct_node->type == NODE_STRUCT)
                             {
-                                if (strcmp(sd->name, clean_name) == 0)
+                                ASTNode *field = struct_node->strct.fields;
+                                while (field)
                                 {
-                                    if (sd->node && sd->node->strct.fields)
+                                    if (strcmp(field->field.name, parts[p]) == 0)
                                     {
-                                        ASTNode *field = sd->node->strct.fields;
-                                        while (field)
-                                        {
-                                            if (strcmp(field->field.name, parts[p]) == 0)
-                                            {
-                                                free(type_name);
-                                                type_name = field->field.type
-                                                                ? strdup(field->field.type)
-                                                                : NULL;
-                                                found_field = 1;
-                                                break;
-                                            }
-                                            field = field->next;
-                                        }
+                                        free(type_name);
+                                        type_name =
+                                            field->field.type ? strdup(field->field.type) : NULL;
+                                        found_field = 1;
+                                        break;
                                     }
-                                    break;
+                                    field = field->next;
                                 }
-                                sd = sd->next;
                             }
                             if (!found_field)
                             {
@@ -989,33 +982,36 @@ void lsp_completion(const char *uri, int line, int col, int id)
                             }
                             *dst = 0;
 
-                            StructDef *sd = g_project->ctx->struct_defs;
-                            while (sd)
+                            ASTNode *struct_node = find_struct_def(g_project->ctx, clean_name);
+                            if (struct_node)
                             {
-                                if (strcmp(sd->name, clean_name) == 0)
+                                if (struct_node->type == NODE_STRUCT)
                                 {
-                                    if (sd->node && sd->node->strct.fields)
+                                    ASTNode *field = struct_node->strct.fields;
+                                    while (field)
                                     {
-                                        ASTNode *field = sd->node->strct.fields;
-                                        while (field)
-                                        {
-                                            cJSON *item = cJSON_CreateObject();
-                                            cJSON_AddStringToObject(item, "label",
-                                                                    field->field.name);
-                                            cJSON_AddNumberToObject(item, "kind", 5); // Field
-                                            char detail[MAX_SHORT_MSG_LEN];
-                                            snprintf(detail, sizeof(detail), "field %s",
-                                                     field->field.type ? field->field.type
-                                                                       : "unknown");
-                                            cJSON_AddStringToObject(item, "detail", detail);
-                                            cJSON_AddItemToArray(items, item);
-                                            field = field->next;
-                                        }
+                                        cJSON *item = cJSON_CreateObject();
+                                        cJSON_AddStringToObject(item, "label", field->field.name);
+                                        cJSON_AddNumberToObject(item, "kind", 5); // Field
+                                        cJSON_AddStringToObject(item, "detail", field->field.type);
+                                        cJSON_AddItemToArray(items, item);
+                                        field = field->next;
                                     }
-                                    dot_completed = 1;
-                                    break;
                                 }
-                                sd = sd->next;
+                                else if (struct_node->type == NODE_ENUM)
+                                {
+                                    ASTNode *variant = struct_node->enm.variants;
+                                    while (variant)
+                                    {
+                                        cJSON *item = cJSON_CreateObject();
+                                        cJSON_AddStringToObject(item, "label",
+                                                                variant->variant.name);
+                                        cJSON_AddNumberToObject(item, "kind", 12); // EnumMember
+                                        cJSON_AddItemToArray(items, item);
+                                        variant = variant->next;
+                                    }
+                                }
+                                dot_completed = 1;
                             }
 
                             // Show methods (Struct::Method)
@@ -1134,7 +1130,7 @@ void lsp_completion(const char *uri, int line, int col, int id)
             cJSON_AddNumberToObject(item, "kind", 14); // Keyword
             cJSON_AddStringToObject(item, "insertText", keywords[i].snippet);
             cJSON_AddNumberToObject(item, "insertTextFormat", 2); // Snippet
-            cJSON_AddStringToObject(item, "sortText", "100");     // Keywords at bottom
+            cJSON_AddStringToObject(item, "sortText", "005");     // Keywords higher up
             cJSON_AddItemToArray(items, item);
         }
 
@@ -1163,7 +1159,7 @@ void lsp_completion(const char *uri, int line, int col, int id)
             cJSON *item = cJSON_CreateObject();
             cJSON_AddStringToObject(item, "label", plain_keywords[i]);
             cJSON_AddNumberToObject(item, "kind", 14);
-            cJSON_AddStringToObject(item, "sortText", "110");
+            cJSON_AddStringToObject(item, "sortText", "008");
             cJSON_AddItemToArray(items, item);
         }
 

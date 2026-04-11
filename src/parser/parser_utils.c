@@ -458,6 +458,19 @@ void register_symbol_to_lsp(ParserContext *ctx, ZenSymbol *s)
         return;
     }
 
+    // Deduplicate: Don't add if same name, kind, and location already exists
+    ZenSymbol *curr = ctx->all_symbols;
+    while (curr)
+    {
+        if (curr->kind == s->kind && curr->decl_token.line == s->decl_token.line &&
+            curr->decl_token.col == s->decl_token.col && curr->name && s->name &&
+            strcmp(curr->name, s->name) == 0)
+        {
+            return;
+        }
+        curr = curr->next;
+    }
+
     ZenSymbol *lsp_copy = xmalloc(sizeof(ZenSymbol));
     memcpy(lsp_copy, s, sizeof(ZenSymbol));
     if (s->name)
