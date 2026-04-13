@@ -1867,6 +1867,39 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
     return n;
 }
 
+static void append_to_gen(char **gen, size_t *cap, const char *s)
+{
+    size_t len = strlen(*gen);
+    size_t slen = strlen(s);
+    if (len + slen + 1 >= *cap)
+    {
+        *cap = (*cap + slen) * 2;
+        *gen = xrealloc(*gen, *cap);
+    }
+    strcat(*gen, s);
+}
+
+static void append_to_gen_fmt(char **gen, size_t *cap, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int size = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    if (size < 0)
+    {
+        return;
+    }
+
+    char *buf = xmalloc(size + 1);
+    va_start(args, fmt);
+    vsnprintf(buf, size + 1, fmt, args);
+    va_end(args);
+
+    append_to_gen(gen, cap, buf);
+    free(buf);
+}
+
 char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *content, int newline,
                            const char *target, char ***used_syms, int *count, int check_symbols,
                            int is_raw)
@@ -1874,10 +1907,11 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
 {
     int saved_silent = ctx->silent_warnings;
     ctx->silent_warnings = !check_symbols;
-    char *gen = xmalloc(1024 * 32); // 32 KB should be enough for any reasonable string
+
+    size_t gen_cap = 1024 * 32;
+    char *gen = xmalloc(gen_cap);
     gen[0] = 0;
-    char buf[2048]; // Function-scope buffer for all interpolation paths
-    strcpy(gen, "({ ");
+    append_to_gen(&gen, &gen_cap, "({ ");
 
     char *s = xstrdup(content);
     char *cur = s;
@@ -1909,12 +1943,7 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
         if (brace > cur)
         {
             // Append text literal
-            const size_t gen_size = 1024 * 32;
-            snprintf(buf, sizeof(buf), "fprintf(%s, \"%%s\", \"", target);
-            if (strlen(gen) + strlen(buf) < gen_size)
-            {
-                strcat(gen, buf);
-            }
+            append_to_gen_fmt(&gen, &gen_cap, "fprintf(%s, \"%%s\", \"", target);
 
             int seg_len = brace - cur;
             char *txt = xmalloc(seg_len + 1);
@@ -1939,8 +1968,8 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
             txt[write_idx] = 0;
 
             char *escaped = escape_c_string(txt);
-            strcat(gen, escaped);
-            strcat(gen, "\"); ");
+            append_to_gen(&gen, &gen_cap, escaped);
+            append_to_gen(&gen, &gen_cap, "\"); ");
 
             free(escaped);
             free(txt);
@@ -2172,21 +2201,17 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
         if (fmt)
         {
             // Explicit format: {x:%.2f}
-            const size_t gen_size = 1024 * 32;
             if (force_simple)
             {
-                snprintf(buf, sizeof(buf), "fprintf(%s, \"%%%s\", %s); ", target, fmt, rw_expr);
+                append_to_gen_fmt(&gen, &gen_cap, "fprintf(%s, \"%%%s\", %s); ", target, fmt,
+                                  rw_expr);
             }
             else
             {
-                snprintf(buf, sizeof(buf),
-                         "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%%s\", "
-                         "_z_interp_val); _z_drop(_z_interp_val); }); ",
-                         rw_expr, target, fmt);
-            }
-            if (strlen(gen) + strlen(buf) < gen_size)
-            {
-                strcat(gen, buf);
+                append_to_gen_fmt(&gen, &gen_cap,
+                                  "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%%s\", "
+                                  "_z_interp_val); _z_drop(_z_interp_val); }); ",
+                                  rw_expr, target, fmt);
             }
         }
         else
@@ -2269,19 +2294,20 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                             const char *acc = is_p ? "->" : ".";
                             if (force_simple)
                             {
-                                sprintf(buf, "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ",
-                                        target, rw_expr, acc, rw_expr, acc);
+                                append_to_gen_fmt(
+                                    &gen, &gen_cap,
+                                    "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ", target,
+                                    rw_expr, acc, rw_expr, acc);
                             }
                             else
                             {
-                                sprintf(
-                                    buf,
+                                append_to_gen_fmt(
+                                    &gen, &gen_cap,
                                     "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%.*s\", "
                                     "(int)(_z_interp_val)%slen, (_z_interp_val)%sdata); "
                                     "_z_drop(_z_interp_val); }); ",
                                     rw_expr, target, acc, acc);
                             }
-                            strcat(gen, buf);
                             goto next_segment;
                         }
                     }
@@ -2317,19 +2343,20 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                             const char *acc = is_p ? "->" : ".";
                             if (force_simple)
                             {
-                                sprintf(buf, "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ",
-                                        target, rw_expr, acc, rw_expr, acc);
+                                append_to_gen_fmt(
+                                    &gen, &gen_cap,
+                                    "fprintf(%s, \"%%.*s\", (int)(%s)%slen, (%s)%sdata); ", target,
+                                    rw_expr, acc, rw_expr, acc);
                             }
                             else
                             {
-                                sprintf(
-                                    buf,
+                                append_to_gen_fmt(
+                                    &gen, &gen_cap,
                                     "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%.*s\", "
                                     "(int)(_z_interp_val)%slen, (_z_interp_val)%sdata); "
                                     "_z_drop(_z_interp_val); }); ",
                                     rw_expr, target, acc, acc);
                             }
-                            strcat(gen, buf);
                             goto next_segment;
                         }
                     }
@@ -2448,33 +2475,36 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                 {
                     if (force_simple)
                     {
-                        sprintf(buf, "fprintf(%s, \"%%%s\", _z_bool_str(%s)); ", target,
-                                format_spec + 1, rw_expr);
+                        append_to_gen_fmt(&gen, &gen_cap,
+                                          "fprintf(%s, \"%%%s\", _z_bool_str(%s)); ", target,
+                                          format_spec + 1, rw_expr);
                     }
                     else
                     {
-                        sprintf(buf,
-                                "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%%s\", "
-                                "_z_bool_str(_z_interp_val)); _z_drop(_z_interp_val); }); ",
-                                rw_expr, target, format_spec + 1);
+                        append_to_gen_fmt(
+                            &gen, &gen_cap,
+                            "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%%s\", "
+                            "_z_bool_str(_z_interp_val)); _z_drop(_z_interp_val); "
+                            "}); ",
+                            rw_expr, target, format_spec + 1);
                     }
                 }
                 else
                 {
                     if (force_simple)
                     {
-                        sprintf(buf, "fprintf(%s, \"%%%s\", %s); ", target, format_spec + 1,
-                                rw_expr);
+                        append_to_gen_fmt(&gen, &gen_cap, "fprintf(%s, \"%%%s\", %s); ", target,
+                                          format_spec + 1, rw_expr);
                     }
                     else
                     {
-                        sprintf(buf,
-                                "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%%s\", "
-                                "_z_interp_val); _z_drop(_z_interp_val); }); ",
-                                rw_expr, target, format_spec + 1);
+                        append_to_gen_fmt(
+                            &gen, &gen_cap,
+                            "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%%s\", "
+                            "_z_interp_val); _z_drop(_z_interp_val); }); ",
+                            rw_expr, target, format_spec + 1);
                     }
                 }
-                strcat(gen, buf);
             }
             else
             {
@@ -2483,34 +2513,36 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                 {
                     if (force_simple && !is_temporary)
                     {
-                        sprintf(buf, "fprintf(%s, \"%%s\", (char*)%s(%s%s)); ", target,
-                                mangled_to_string, to_string_is_ptr ? "" : "&", rw_expr);
+                        append_to_gen_fmt(&gen, &gen_cap, "fprintf(%s, \"%%s\", (char*)%s(%s%s)); ",
+                                          target, mangled_to_string, to_string_is_ptr ? "" : "&",
+                                          rw_expr);
                     }
                     else
                     {
-                        sprintf(buf,
-                                "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%s\", "
-                                "(char*)%s(%s_z_interp_val)); _z_drop(_z_interp_val); }); ",
-                                rw_expr, target, mangled_to_string, to_string_is_ptr ? "" : "&");
+                        append_to_gen_fmt(
+                            &gen, &gen_cap,
+                            "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, \"%%s\", "
+                            "(char*)%s(%s_z_interp_val)); _z_drop(_z_interp_val); "
+                            "}); ",
+                            rw_expr, target, mangled_to_string, to_string_is_ptr ? "" : "&");
                     }
                 }
                 else
                 {
                     if (force_simple)
                     {
-                        sprintf(buf, "fprintf(%s, _z_str(%s), _z_arg(%s)); ", target, rw_expr,
-                                rw_expr);
+                        append_to_gen_fmt(&gen, &gen_cap, "fprintf(%s, _z_str(%s), _z_arg(%s)); ",
+                                          target, rw_expr, rw_expr);
                     }
                     else
                     {
-                        sprintf(buf,
-                                "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, "
-                                "_z_str(_z_interp_val), _z_arg(_z_interp_val)); "
-                                "_z_drop(_z_interp_val); }); ",
-                                rw_expr, target);
+                        append_to_gen_fmt(&gen, &gen_cap,
+                                          "({ ZC_AUTO_INIT(_z_interp_val, %s); fprintf(%s, "
+                                          "_z_str(_z_interp_val), _z_arg(_z_interp_val)); "
+                                          "_z_drop(_z_interp_val); }); ",
+                                          rw_expr, target);
                     }
                 }
-                strcat(gen, buf);
             }
         }
 
@@ -2538,15 +2570,14 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
 
     if (newline)
     {
-        sprintf(buf, "fprintf(%s, \"\\n\"); ", target);
-        strcat(gen, buf);
+        append_to_gen_fmt(&gen, &gen_cap, "fprintf(%s, \"\\n\"); ", target);
     }
     else
     {
-        strcat(gen, "fflush(stdout); ");
+        append_to_gen(&gen, &gen_cap, "fflush(stdout); ");
     }
 
-    strcat(gen, "0; })");
+    append_to_gen(&gen, &gen_cap, "0; })");
 
     free(s);
     ctx->silent_warnings = saved_silent;

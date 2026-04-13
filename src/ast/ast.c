@@ -144,12 +144,16 @@ Type *type_new_vector(Type *inner, int size)
 
 int is_char_ptr(Type *t)
 {
+    if (!t)
+    {
+        return 0;
+    }
     // Handle both primitive char* and legacy struct char*.
-    if (TYPE_POINTER == t->kind && TYPE_CHAR == t->inner->kind)
+    if (TYPE_POINTER == t->kind && t->inner && TYPE_CHAR == t->inner->kind)
     {
         return 1;
     }
-    if (TYPE_POINTER == t->kind && TYPE_STRUCT == t->inner->kind &&
+    if (TYPE_POINTER == t->kind && t->inner && TYPE_STRUCT == t->inner->kind && t->inner->name &&
         0 == strcmp(t->inner->name, "char"))
     {
         return 1;

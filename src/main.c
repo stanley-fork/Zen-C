@@ -554,7 +554,7 @@ int main(int argc, char **argv)
 
     if (!g_config.quiet)
     {
-        printf(COLOR_BOLD COLOR_GREEN "   Compiling" COLOR_RESET " %s\n", g_config.input_file);
+        printf(COLOR_BOLD COLOR_GREEN "    Parsing" COLOR_RESET " %s\n", g_config.input_file);
         fflush(stdout);
     }
 
@@ -683,6 +683,11 @@ int main(int argc, char **argv)
     int tc_result = 0;
     if (g_config.use_typecheck || g_config.mode_check)
     {
+        if (!g_config.quiet)
+        {
+            printf(COLOR_BOLD COLOR_GREEN "   Analyzing" COLOR_RESET " %s\n", g_config.input_file);
+            fflush(stdout);
+        }
         tc_result = check_program(&ctx, root);
         if (tc_result != 0 && !g_config.mode_check)
         {
@@ -757,6 +762,11 @@ int main(int argc, char **argv)
     const char *temp_source_file = temp_source_buf;
 
     // Codegen to C/C++/CUDA
+    if (!g_config.quiet)
+    {
+        printf(COLOR_BOLD COLOR_GREEN " Transpiling" COLOR_RESET " %s\n", g_config.input_file);
+        fflush(stdout);
+    }
     FILE *out = fopen(temp_source_file, "w");
     if (!out)
     {
