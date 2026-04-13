@@ -1467,10 +1467,14 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
         }
 
         char *expr_start = brace + 1;
-        // char *expr_end = colon ? colon : end_brace;
+        char *expr_end = colon ? colon : end_brace;
+        int expr_len = (int)(expr_end - expr_start);
+        char *expr_str = xmalloc(expr_len + 1);
+        strncpy(expr_str, expr_start, expr_len);
+        expr_str[expr_len] = '\0';
 
         Lexer sub_l;
-        lexer_init(&sub_l, expr_start);
+        lexer_init(&sub_l, expr_str);
 
         // Sync line info
         sub_l.line = parent_token.line;
@@ -1545,7 +1549,7 @@ static ASTNode *create_fstring_block(ParserContext *ctx, Token parent_token, cha
 
         // Check for leftover tokens.
         Token next = lexer_peek(&sub_l);
-        if (next.type != TOK_RBRACE && next.type != TOK_COLON)
+        if (next.type != TOK_EOF && next.type != TOK_RBRACE && next.type != TOK_COLON)
         {
             if (next.type == TOK_COMMA)
             {
