@@ -1779,7 +1779,14 @@ static ASTNode *parse_intrinsic(ParserContext *ctx, Lexer *l)
     return node;
 }
 
+static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l);
+
 ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
+{
+    return parse_primary_impl(ctx, l);
+}
+
+static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
 {
     ASTNode *node = NULL;
 
@@ -4764,7 +4771,22 @@ char *resolve_struct_name_from_type(ParserContext *ctx, Type *t, int *is_ptr_out
     return struct_name;
 }
 
+static ASTNode *parse_expr_prec_impl(ParserContext *ctx, Lexer *l, Precedence min_prec);
+
 ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
+{
+    if (++ctx->recursion_depth > 2000)
+    {
+        zpanic_at(lexer_peek(l), "Expression nesting too deep (max 2000)");
+        ctx->recursion_depth--;
+        return NULL;
+    }
+    ASTNode *res = parse_expr_prec_impl(ctx, l, min_prec);
+    ctx->recursion_depth--;
+    return res;
+}
+
+static ASTNode *parse_expr_prec_impl(ParserContext *ctx, Lexer *l, Precedence min_prec)
 {
     Token t = lexer_peek(l);
     ASTNode *lhs = NULL;

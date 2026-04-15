@@ -270,4 +270,40 @@ test-asan: clean asan
 test-plugins: $(TARGET) $(PLUGINS)
 	./zc run tests/plugins_suite.zc
 
+# Fuzzing
+FUZZ_TARGET = zc-fuzz
+FUZZ_CMPLOG_TARGET = zc-fuzz-cmplog
+FUZZ_CC ?= afl-clang-fast
+FUZZ_DIR = fuzz
+FUZZ_OUT = $(FUZZ_DIR)/out
+FUZZ_CORPUS = $(FUZZ_DIR)/corpus
+FUZZ_DICT = $(FUZZ_DIR)/zen_c.dict
+
+# High-performance flags
+FUZZ_CFLAGS = -O3 -march=native -D__AFL_HAVE_MANUAL_CONTROL
+
+fuzz-build:
+	@$(MKDIR) $(OBJ_DIR)/fuzz
+	$(MAKE) CC=$(FUZZ_CC) CFLAGS='$(CFLAGS) $(FUZZ_CFLAGS)' OBJ_DIR=obj-fuzz TARGET=$(FUZZ_TARGET) SRCS="$(filter-out src/main.c,$(SRCS)) fuzz/harness.c"
+	@echo "=> Fuzzing target built (Persistent Mode): $(FUZZ_TARGET)"
+
+fuzz-cmplog-build:
+	@$(MKDIR) $(OBJ_DIR)/fuzz-cmplog
+	AFL_LLVM_CMPLOG=1 $(MAKE) CC=$(FUZZ_CC) CFLAGS='$(CFLAGS) $(FUZZ_CFLAGS)' OBJ_DIR=obj-fuzz-cmplog TARGET=$(FUZZ_CMPLOG_TARGET) SRCS="$(filter-out src/main.c,$(SRCS)) fuzz/harness.c"
+	@echo "=> CmpLog target built: $(FUZZ_CMPLOG_TARGET)"
+
+fuzz-run: fuzz-build
+	@if [ ! -d "$(FUZZ_CORPUS)" ]; then sh $(FUZZ_DIR)/scripts/generate_corpus.sh; fi
+	@$(MKDIR) $(FUZZ_OUT)
+	@echo "-> Starting fuzzer (Persistent Mode enabled)"
+	@echo "-> Tip: For parallel runs, use '-M main' and '-S secondaryN'"
+	AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 afl-fuzz -i $(FUZZ_CORPUS) -o $(FUZZ_OUT) -x $(FUZZ_DICT) -- ./$(FUZZ_TARGET)
+
+fuzz-clean:
+	rm -rf $(FUZZ_OUT)/*
+	rm -f $(FUZZ_TARGET) $(FUZZ_CMPLOG_TARGET)
+	rm -rf obj-fuzz obj-fuzz-cmplog
+
+.PHONY: all clean install uninstall install-ape uninstall-ape test zig clang ape windows asan test-asan test-plugins fuzz-build fuzz-run
+
 .PHONY: all clean install uninstall install-ape uninstall-ape test zig clang ape windows asan test-asan test-plugins

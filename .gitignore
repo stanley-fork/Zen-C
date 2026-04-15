@@ -27,3 +27,10 @@ docs/latex/
 *.db
 build_dir_env.txt 
 build_dir_linux.txt
+fuzz/
+scratch/
+test_out_*.out.c
+trace.txt
+zc-*
+_tmp_comptime_*.c
+.github/workflows/fuzzing.yml

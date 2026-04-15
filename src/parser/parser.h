@@ -270,6 +270,7 @@ typedef struct TypeAlias
  */
 struct ParserContext
 {
+    int recursion_depth;    ///< Guard against stack overflow.
     Scope *global_scope;    ///< Root of the unified symbol table.
     Scope *current_scope;   ///< Current lexical scope for variable lookup.
     FuncSig *func_registry; ///< Registry of declared function signatures (DEPRECATED: moved to

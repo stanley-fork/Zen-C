@@ -862,23 +862,27 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                     char *stmt_str = NULL;
                     if (arg_type->kind == TYPE_FUNCTION)
                     {
-                        stmt_str = xmalloc(256 + strlen(arg_name) * 2);
-                        sprintf(stmt_str, "if (__z_drop_flag_%s && %s.drop) %s.drop(%s.ctx);",
-                                arg_name, arg_name, arg_name, arg_name);
+                        size_t stmt_sz = 256 + strlen(arg_name) * 4;
+                        stmt_str = xmalloc(stmt_sz);
+                        snprintf(stmt_str, stmt_sz,
+                                 "if (__z_drop_flag_%s && %s.drop) %s.drop(%s.ctx);", arg_name,
+                                 arg_name, arg_name, arg_name);
                     }
                     else
                     {
-                        stmt_str = xmalloc(256 + strlen(arg_name) * 2 + strlen(drop_type_name));
+                        size_t stmt_sz = 256 + strlen(arg_name) * 2 + strlen(drop_type_name);
+                        stmt_str = xmalloc(stmt_sz);
                         // If it's self, it's already a pointer in C
                         if (strcmp(arg_name, "self") == 0)
                         {
-                            sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop__glue(%s);", arg_name,
-                                    drop_type_name, arg_name);
+                            snprintf(stmt_str, stmt_sz, "if (__z_drop_flag_%s) %s__Drop__glue(%s);",
+                                     arg_name, drop_type_name, arg_name);
                         }
                         else
                         {
-                            sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop__glue(&%s);",
-                                    arg_name, drop_type_name, arg_name);
+                            snprintf(stmt_str, stmt_sz,
+                                     "if (__z_drop_flag_%s) %s__Drop__glue(&%s);", arg_name,
+                                     drop_type_name, arg_name);
                         }
                     }
                     defer_node->raw_stmt.content = stmt_str;
@@ -946,8 +950,9 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                     m->func.name[slen + 1] == '_')
                 {
                     const char *method_part = m->func.name + slen;
-                    char *new_name = xmalloc(strlen(resolved) + strlen(method_part) + 1);
-                    sprintf(new_name, "%s%s", resolved, method_part);
+                    size_t new_name_sz = strlen(resolved) + strlen(method_part) + 1;
+                    char *new_name = xmalloc(new_name_sz);
+                    snprintf(new_name, new_name_sz, "%s%s", resolved, method_part);
                     free(m->func.name);
                     m->func.name = new_name;
                 }
@@ -981,8 +986,9 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                     m->func.name[slen + 1] == '_')
                 {
                     const char *method_part = m->func.name + slen;
-                    char *new_name = xmalloc(strlen(resolved) + strlen(method_part) + 1);
-                    sprintf(new_name, "%s%s", resolved, method_part);
+                    size_t new_name_sz = strlen(resolved) + strlen(method_part) + 1;
+                    char *new_name = xmalloc(new_name_sz);
+                    snprintf(new_name, new_name_sz, "%s%s", resolved, method_part);
                     free(m->func.name);
                     m->func.name = new_name;
                 }
@@ -1183,10 +1189,10 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                     ASTNode *defer_node = xmalloc(sizeof(ASTNode));
                     defer_node->type = NODE_RAW_STMT;
                     defer_node->token = node->token;
-                    char *stmt_str =
-                        xmalloc(256 + strlen(node->var_decl.name) * 2 + strlen(clean_type));
-                    sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop__glue(&%s);",
-                            node->var_decl.name, clean_type, node->var_decl.name);
+                    size_t stmt_sz = 256 + strlen(node->var_decl.name) * 2 + strlen(clean_type);
+                    char *stmt_str = xmalloc(stmt_sz);
+                    snprintf(stmt_str, stmt_sz, "if (__z_drop_flag_%s) %s__Drop__glue(&%s);",
+                             node->var_decl.name, clean_type, node->var_decl.name);
                     defer_node->raw_stmt.content = stmt_str;
                     defer_node->line = node->line;
 
@@ -1275,23 +1281,21 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                         if (node->var_decl.init_expr && node->var_decl.init_expr->type_info &&
                             node->var_decl.init_expr->type_info->kind == TYPE_FUNCTION)
                         {
-                            stmt_str = xmalloc(256 + strlen(node->var_decl.name) * 2);
-                            sprintf(stmt_str, "if (__z_drop_flag_%s && %s.drop) %s.drop(%s.ctx);",
-                                    node->var_decl.name, node->var_decl.name, node->var_decl.name,
-                                    node->var_decl.name);
+                            size_t stmt_sz = 256 + strlen(node->var_decl.name) * 4;
+                            stmt_str = xmalloc(stmt_sz);
+                            snprintf(stmt_str, stmt_sz,
+                                     "if (__z_drop_flag_%s && %s.drop) %s.drop(%s.ctx);",
+                                     node->var_decl.name, node->var_decl.name, node->var_decl.name,
+                                     node->var_decl.name);
                         }
                         else
                         {
-                            char *clean_name = xstrdup(clean_type);
-                            if (strncmp(clean_name, "struct ", 7) == 0)
-                            {
-                                memmove(clean_name, clean_name + 7, strlen(clean_name) - 6);
-                            }
-                            stmt_str =
-                                xmalloc(256 + strlen(node->var_decl.name) * 2 + strlen(clean_name));
-                            sprintf(stmt_str, "if (__z_drop_flag_%s) %s__Drop__glue(&%s);",
-                                    node->var_decl.name, clean_name, node->var_decl.name);
-                            free(clean_name);
+                            size_t stmt_sz =
+                                256 + strlen(node->var_decl.name) * 2 + strlen(clean_type);
+                            stmt_str = xmalloc(stmt_sz);
+                            snprintf(stmt_str, stmt_sz,
+                                     "if (__z_drop_flag_%s) %s__Drop__glue(&%s);",
+                                     node->var_decl.name, clean_type, node->var_decl.name);
                         }
                         defer_node->raw_stmt.content = stmt_str;
                         defer_node->line = node->line;
@@ -1708,7 +1712,8 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
         }
 
         char *code = node->asm_stmt.code;
-        char *transformed = xmalloc(strlen(code) * 3); // Generous buffer
+        size_t transformed_sz = strlen(code) * 3 + 128; // Extra buffer for expansions
+        char *transformed = xmalloc(transformed_sz);
         char *dst = transformed;
 
         for (char *p = code; *p; p++)
@@ -1751,6 +1756,7 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                         }
                     }
 
+                    size_t rem = transformed_sz - (dst - transformed);
                     if (idx >= 0)
                     {
                         // Replace with %N
@@ -1758,18 +1764,18 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                         // Use most optimal register size on arm architectures
                         if (node->asm_stmt.register_size <= 32)
                         {
-                            dst += sprintf(dst, "%%w%d", idx);
+                            dst += snprintf(dst, rem, "%%w%d", idx);
                         }
                         else
 #endif
                         {
-                            dst += sprintf(dst, "%%%d", idx);
+                            dst += snprintf(dst, rem, "%%%d", idx);
                         }
                     }
                     else
                     {
                         // Variable not found - error or keep as-is?
-                        dst += sprintf(dst, "{%s}", var_name);
+                        dst += snprintf(dst, rem, "{%s}", var_name);
                     }
 
                     p = end; // Skip past }

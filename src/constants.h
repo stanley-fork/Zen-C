@@ -1,15 +1,14 @@
-
 #ifndef ZEN_CONSTANTS_H
 #define ZEN_CONSTANTS_H
 
 // Buffer sizes
-#define MAX_TYPE_NAME_LEN 256    ///< Max length for type name strings.
-#define MAX_VAR_NAME_LEN 256     ///< Max length for variable/parameter names.
-#define MAX_FUNC_NAME_LEN 512    ///< Max length for function names.
-#define MAX_SHORT_MSG_LEN 256    ///< Max length for short diagnostic notes or hints.
-#define MAX_ERROR_MSG_LEN 1024   ///< Max length for full error messages.
-#define MAX_MANGLED_NAME_LEN 512 ///< Max length for mangled names (generics).
-#define MAX_PATH_LEN 4096        ///< Max length for file paths.
+#define MAX_TYPE_NAME_LEN 1024    ///< Max length for type name strings.
+#define MAX_VAR_NAME_LEN 256      ///< Max length for variable/parameter names.
+#define MAX_FUNC_NAME_LEN 1024    ///< Max length for function names.
+#define MAX_SHORT_MSG_LEN 256     ///< Max length for short diagnostic notes or hints.
+#define MAX_ERROR_MSG_LEN 2048    ///< Max length for full error messages.
+#define MAX_MANGLED_NAME_LEN 2048 ///< Max length for mangled names (generics).
+#define MAX_PATH_LEN 4096         ///< Max length for file paths.
 
 // Type checking helpers
 

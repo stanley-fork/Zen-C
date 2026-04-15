@@ -169,7 +169,8 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
         //   - Single value: 1
         //   - OR patterns: 1 || 2 or 1 or 2 or 1, 2
         //   - Range patterns: 1..5 or 1..=5 or 1..<5
-        char patterns_buf[MAX_ERROR_MSG_LEN];
+        size_t pat_cap = 1024;
+        char *patterns_buf = xmalloc(pat_cap);
         patterns_buf[0] = 0;
         int pattern_count = 0;
 
@@ -204,6 +205,13 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
                 free(p_str);
                 free(end_str);
                 p_str = range_str;
+            }
+
+            size_t needed = strlen(patterns_buf) + strlen(p_str) + 4;
+            if (needed >= pat_cap)
+            {
+                pat_cap = pat_cap * 2 + needed;
+                patterns_buf = xrealloc(patterns_buf, pat_cap);
             }
 
             if (pattern_count > 0)
@@ -628,8 +636,8 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
     lexer_next(l);
 
     // Parse assembly template strings
-    const size_t code_size = 4096;
-    char *code = xmalloc(code_size); // Buffer for assembly code
+    size_t code_cap = 4096;
+    char *code = xmalloc(code_cap); // Buffer for assembly code
     code[0] = 0;
 
     while (1)
@@ -651,33 +659,37 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
             lexer_next(l);
             // Extract string content (strip quotes)
             int str_len = inner_t.len - 2;
-            if (strlen(code) > 0)
+            size_t current_len = strlen(code);
+            size_t needed = current_len + str_len + 5; // + newline + null + safety
+            if (needed >= code_cap)
             {
-                if (strlen(code) + 2 < code_size)
-                {
-                    strcat(code, "\n");
-                }
+                code_cap = code_cap * 2 + needed;
+                code = xrealloc(code, code_cap);
             }
-            if (strlen(code) + str_len < code_size)
+
+            if (current_len > 0)
             {
-                strncat(code, inner_t.start + 1, str_len);
+                strcat(code, "\n");
             }
+            strncat(code, inner_t.start + 1, str_len);
         }
         // Also support bare identifiers for simple instructions like 'nop', 'pause'
         else if (inner_t.type == TOK_IDENT)
         {
             lexer_next(l);
-            if (strlen(code) > 0)
+            size_t current_len = strlen(code);
+            size_t needed = current_len + inner_t.len + 5;
+            if (needed >= code_cap)
             {
-                if (strlen(code) + 2 < code_size)
-                {
-                    strcat(code, "\n");
-                }
+                code_cap = code_cap * 2 + needed;
+                code = xrealloc(code, code_cap);
             }
-            if (strlen(code) + inner_t.len < code_size)
+
+            if (current_len > 0)
             {
-                strncat(code, inner_t.start, inner_t.len);
+                strcat(code, "\n");
             }
+            strncat(code, inner_t.start, inner_t.len);
 
             // Check for instruction arguments
             while (lexer_peek(l).type != TOK_RBRACE && lexer_peek(l).type != TOK_COLON)
@@ -694,26 +706,34 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
                 if (arg.type == TOK_LBRACE)
                 {
                     lexer_next(l);
-                    if (strlen(code) + 2 < code_size)
+
+                    if (strlen(code) + 2 >= code_cap)
                     {
-                        strcat(code, "{");
+                        code_cap *= 2;
+                        code = xrealloc(code, code_cap);
                     }
+                    strcat(code, "{");
+
                     // Consume until }
                     while (lexer_peek(l).type != TOK_RBRACE && lexer_peek(l).type != TOK_EOF)
                     {
                         Token sub = lexer_next(l);
-                        if (strlen(code) + sub.len < code_size)
+                        if (strlen(code) + sub.len + 1 >= code_cap)
                         {
-                            strncat(code, sub.start, sub.len);
+                            code_cap = code_cap * 2 + sub.len;
+                            code = xrealloc(code, code_cap);
                         }
+                        strncat(code, sub.start, sub.len);
                     }
                     if (lexer_peek(l).type == TOK_RBRACE)
                     {
                         lexer_next(l);
-                        if (strlen(code) + 2 < code_size)
+                        if (strlen(code) + 2 >= code_cap)
                         {
-                            strcat(code, "}");
+                            code_cap *= 2;
+                            code = xrealloc(code, code_cap);
                         }
+                        strcat(code, "}");
                     }
                     continue;
                 }
@@ -1382,7 +1402,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
 
                     char *elem_type_str = type_to_string(obj_expr->type_info->inner);
                     char slice_type[MAX_TYPE_NAME_LEN];
-                    sprintf(slice_type, "Slice<%s>", elem_type_str);
+                    snprintf(slice_type, sizeof(slice_type), "Slice<%s>", elem_type_str);
                     slice_decl->var_decl.type_str = xstrdup(slice_type);
 
                     ASTNode *from_array_call = ast_create(NODE_EXPR_CALL);
@@ -1390,7 +1410,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                     ASTNode *static_method = ast_create(NODE_EXPR_VAR);
 
                     char func_name[MAX_FUNC_NAME_LEN];
-                    snprintf(func_name, 511, "Slice__%s__from_array", elem_type_str);
+                    snprintf(func_name, sizeof(func_name), "Slice__%s__from_array", elem_type_str);
                     static_method->var_ref.name = xstrdup(func_name);
 
                     from_array_call->call.callee = static_method;
@@ -1401,7 +1421,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
 
                     ASTNode *arr_cast = ast_create(NODE_EXPR_CAST);
                     char cast_type[MAX_TYPE_NAME_LEN];
-                    sprintf(cast_type, "%s*", elem_type_str);
+                    snprintf(cast_type, sizeof(cast_type), "%s*", elem_type_str);
                     arr_cast->cast.target_type = xstrdup(cast_type);
                     arr_cast->cast.expr = arr_addr;
 
@@ -1409,7 +1429,7 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                     size_arg->literal.type_kind = LITERAL_INT;
                     size_arg->literal.int_val = obj_expr->type_info->array_size;
                     char size_buf[32];
-                    sprintf(size_buf, "%d", obj_expr->type_info->array_size);
+                    snprintf(size_buf, sizeof(size_buf), "%d", obj_expr->type_info->array_size);
                     size_arg->literal.string_val = xstrdup(size_buf);
 
                     arr_cast->next = size_arg;
@@ -1918,7 +1938,7 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
     if (is_expr)
     {
         append_to_gen_fmt(&gen, &gen_cap,
-                          "static char _fs_buf_%d[4096]; _fs_buf_%d[0]=0; char _fs_t_%d[1024]; ",
+                          "static char _fs_buf_%d[8192]; _fs_buf_%d[0]=0; char _fs_t_%d[2048]; ",
                           fs_id, fs_id, fs_id);
     }
 
@@ -2229,9 +2249,9 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                 if (is_expr)
                 {
                     append_to_gen_fmt(&gen, &gen_cap,
-                                      "sprintf(_fs_t_%d, \"%%%s\", %s); strcat(_fs_buf_%d, "
-                                      "_fs_t_%d); ",
-                                      fs_id, fmt, rw_expr, fs_id, fs_id);
+                                      "snprintf(_fs_t_%d, 2048, \"%%%s\", %s); strncat(_fs_buf_%d, "
+                                      "_fs_t_%d, 8192 - strlen(_fs_buf_%d) - 1); ",
+                                      fs_id, fmt, rw_expr, fs_id, fs_id, fs_id);
                 }
                 else
                 {
@@ -2244,10 +2264,11 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                 if (is_expr)
                 {
                     append_to_gen_fmt(&gen, &gen_cap,
-                                      "({ ZC_AUTO_INIT(_z_interp_val, %s); sprintf(_fs_t_%d, "
-                                      "\"%%%s\", _z_interp_val); strcat(_fs_buf_%d, _fs_t_%d); "
+                                      "({ ZC_AUTO_INIT(_z_interp_val, %s); snprintf(_fs_t_%d, "
+                                      "2048, \"%%%s\", _z_interp_val); strncat(_fs_buf_%d, "
+                                      "_fs_t_%d, 8192 - strlen(_fs_buf_%d) - 1); "
                                       "_z_drop(_z_interp_val); }); ",
-                                      rw_expr, fs_id, fmt, fs_id, fs_id);
+                                      rw_expr, fs_id, fmt, fs_id, fs_id, fs_id);
                 }
                 else
                 {
@@ -2342,8 +2363,9 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                                 {
                                     append_to_gen_fmt(
                                         &gen, &gen_cap,
-                                        "sprintf(_fs_t_%d, \"%%.*s\", (int)(%s)%slen, "
-                                        "(%s)%sdata); strcat(_fs_buf_%d, _fs_t_%d); ",
+                                        "snprintf(_fs_t_%d, 2048, \"%%.*s\", (int)(%s)%slen, "
+                                        "(%s)%sdata); strncat(_fs_buf_%d, _fs_t_%d, 8192 - "
+                                        "strlen(_fs_buf_%d) - 1); ",
                                         fs_id, rw_expr, acc, rw_expr, acc, fs_id, fs_id);
                                 }
                                 else
@@ -2360,10 +2382,11 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
                                 {
                                     append_to_gen_fmt(
                                         &gen, &gen_cap,
-                                        "({ ZC_AUTO_INIT(_z_interp_val, %s); sprintf(_fs_t_%d, "
-                                        "\"%%.*s\", (int)(_z_interp_val)%slen, "
-                                        "(_z_interp_val)%sdata); strcat(_fs_buf_%d, "
-                                        "_fs_t_%d); _z_drop(_z_interp_val); }); ",
+                                        "({ ZC_AUTO_INIT(_z_interp_val, %s); snprintf(_fs_t_%d, "
+                                        "2048, \"%%.*s\", (int)(_z_interp_val)%slen, "
+                                        "(_z_interp_val)%sdata); strncat(_fs_buf_%d, "
+                                        "_fs_t_%d, 8192 - strlen(_fs_buf_%d) - 1); "
+                                        "_z_drop(_z_interp_val); }); ",
                                         rw_expr, fs_id, acc, acc, fs_id, fs_id);
                                 }
                                 else
@@ -3762,6 +3785,7 @@ ASTNode *parse_block(ParserContext *ctx, Lexer *l)
             continue;
         }
 
+        Token prev_t = lexer_peek(l);
         ASTNode *s = parse_statement(ctx, l);
         if (s)
         {
@@ -3786,6 +3810,16 @@ ASTNode *parse_block(ParserContext *ctx, Lexer *l)
                 {
                     unreachable = 1;
                 }
+            }
+        }
+        else
+        {
+            // If we didn't get a statement and didn't consume any tokens, we're stuck.
+            // Consume at least one token to avoid infinite loop.
+            Token cur_t = lexer_peek(l);
+            if (cur_t.start == prev_t.start)
+            {
+                lexer_next(l);
             }
         }
     }
