@@ -157,12 +157,19 @@ while read -r test_file; do
         fi
     fi
 
-    if [[ "$sys_arch" != *"arm64"* && "$sys_arch" != "aarch64" ]]; then
-        if [[ "$test_file" == *"_arm64.zc"* ]]; then
+    if [[ "$test_file" == *"_arm64.zc"* ]]; then
+        if [[ "$sys_arch" != *"arm64"* && "$sys_arch" != "aarch64" ]]; then
             echo "Skipping $test_file (ARM64 assembly not supported on $sys_arch)"
             ((SKIPPED++))
             continue
         fi
+    fi
+
+    # Skip MISRA tests (handled by run_misra_tests.sh)
+    if [[ "$test_file" == *"tests/misra/"* ]]; then
+        echo "Skipping $test_file (MISRA compliance test managed separately)"
+        ((SKIPPED++))
+        continue
     fi
 
     # Skip tests that require typechecking if not enabled

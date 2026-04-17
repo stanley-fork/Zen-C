@@ -413,6 +413,10 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
         codegen_match_internal(ctx, node, out, 1);
         break;
     case NODE_EXPR_BINARY:
+        if (g_config.misra_mode)
+        {
+            fprintf(out, "(");
+        }
         if (strncmp(node->binary.op, "??", 2) == 0 && strlen(node->binary.op) == 2)
         {
             fprintf(out, "({ ");
@@ -726,7 +730,33 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                 }
 
                 fprintf(out, " %s ", node->binary.op);
-                codegen_expression_with_move(ctx, node->binary.right, out);
+                if (g_config.misra_mode)
+                {
+                    char *c_type = NULL;
+                    if (node->binary.left->type_info)
+                    {
+                        c_type = type_to_c_string(node->binary.left->type_info);
+                    }
+                    if (c_type && strcmp(c_type, "unknown") != 0 && strcmp(c_type, "void") != 0)
+                    {
+                        fprintf(out, "(%s)(", c_type);
+                        codegen_expression_with_move(ctx, node->binary.right, out);
+                        fprintf(out, ")");
+                        free(c_type);
+                    }
+                    else
+                    {
+                        if (c_type)
+                        {
+                            free(c_type);
+                        }
+                        codegen_expression_with_move(ctx, node->binary.right, out);
+                    }
+                }
+                else
+                {
+                    codegen_expression_with_move(ctx, node->binary.right, out);
+                }
                 fprintf(out, ")");
             }
 
@@ -734,6 +764,10 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
             {
                 free(clean_type);
             }
+        }
+        if (g_config.misra_mode)
+        {
+            fprintf(out, ")");
         }
         break;
     case NODE_EXPR_VAR:

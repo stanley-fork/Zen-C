@@ -22,6 +22,17 @@ int eval_const_int_expr(ASTNode *node, ParserContext *ctx, long long *out_val)
 
     case NODE_EXPR_VAR:
     {
+        if (strcmp(node->var_ref.name, "true") == 0)
+        {
+            *out_val = 1;
+            return 1;
+        }
+        if (strcmp(node->var_ref.name, "false") == 0)
+        {
+            *out_val = 0;
+            return 1;
+        }
+
         ZenSymbol *sym = find_symbol_entry(ctx, node->var_ref.name);
         if (sym && sym->is_const_value)
         {
@@ -99,6 +110,38 @@ int eval_const_int_expr(ASTNode *node, ParserContext *ctx, long long *out_val)
         {
             *out_val = left ^ right;
         }
+        else if (strcmp(node->binary.op, "==") == 0)
+        {
+            *out_val = (left == right);
+        }
+        else if (strcmp(node->binary.op, "!=") == 0)
+        {
+            *out_val = (left != right);
+        }
+        else if (strcmp(node->binary.op, "<") == 0)
+        {
+            *out_val = (left < right);
+        }
+        else if (strcmp(node->binary.op, ">") == 0)
+        {
+            *out_val = (left > right);
+        }
+        else if (strcmp(node->binary.op, "<=") == 0)
+        {
+            *out_val = (left <= right);
+        }
+        else if (strcmp(node->binary.op, ">=") == 0)
+        {
+            *out_val = (left >= right);
+        }
+        else if (strcmp(node->binary.op, "&&") == 0)
+        {
+            *out_val = (left && right);
+        }
+        else if (strcmp(node->binary.op, "||") == 0)
+        {
+            *out_val = (left || right);
+        }
         else
         {
             return 0;
@@ -126,6 +169,10 @@ int eval_const_int_expr(ASTNode *node, ParserContext *ctx, long long *out_val)
         else if (strcmp(node->unary.op, "~") == 0)
         {
             *out_val = ~operand;
+        }
+        else if (strcmp(node->unary.op, "!") == 0)
+        {
+            *out_val = !operand;
         }
         else
         {

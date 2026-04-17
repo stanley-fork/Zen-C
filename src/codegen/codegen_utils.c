@@ -797,6 +797,12 @@ void emit_func_signature(ParserContext *ctx, FILE *out, ASTNode *func, const cha
         return;
     }
 
+    // Emit MISRA static linkage
+    if (g_config.misra_mode && !func->func.is_export && strcmp(func->func.name, "main") != 0)
+    {
+        fprintf(out, "static ");
+    }
+
     // Emit CUDA qualifiers (for both forward declarations and definitions)
     if (g_config.use_cuda)
     {

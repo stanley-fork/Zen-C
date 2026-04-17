@@ -967,6 +967,17 @@ void warn_void_main(Token t)
                           "Consider using 'fn main()' or 'fn main() -> c_int' instead");
 }
 
+void warn_misra_violation(Token t, const char *msg)
+{
+    // Fire the MISRA warning if the explicit diag is enabled or if the global compiler flag is
+    // active.
+    if (!is_diag_enabled(DIAG_MISRA_VIOLATION) && !g_config.misra_mode)
+    {
+        return;
+    }
+    zwarn_with_suggestion(t, msg, "This pattern violates stringent MISRA C safety standards.");
+}
+
 int is_diag_enabled(DiagnosticID id)
 {
     if (id == DIAG_NONE || id >= DIAG_MAX)

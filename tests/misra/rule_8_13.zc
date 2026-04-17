@@ -1,0 +1,11 @@
+// MISRA Rule 8.13: Const pointers
+// EXPECT: MISRA Rule 8.13
+fn test_const_ptr(p: i32*) -> i32 {
+    let x = *p;
+    return x;
+}
+
+fn main() {
+    let val = 10;
+    test_const_ptr(&val);
+}

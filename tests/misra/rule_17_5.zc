@@ -1,0 +1,10 @@
+// MISRA Rule 17.5 Verification
+// EXPECT: MISRA Rule 17.5
+
+fn takes_array_10(a: [int; 10]) { }
+
+fn main() {
+    let a5: [int; 5];
+    // Violation: passing smaller array to function expecting fixed size
+    takes_array_10(a5); 
+}

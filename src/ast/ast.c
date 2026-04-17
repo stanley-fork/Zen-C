@@ -194,6 +194,69 @@ int is_integer_type(Type *t)
     return res;
 }
 
+int is_unsigned_type(Type *t)
+{
+    if (!t)
+    {
+        return 0;
+    }
+
+    if (t->kind == TYPE_ALIAS && !t->alias.is_opaque_alias)
+    {
+        return is_unsigned_type(t->inner);
+    }
+
+    int res =
+        (t->kind == TYPE_U8 || t->kind == TYPE_U16 || t->kind == TYPE_U32 || t->kind == TYPE_U64 ||
+         t->kind == TYPE_USIZE || t->kind == TYPE_UINT || t->kind == TYPE_U128 ||
+         t->kind == TYPE_UBITINT || t->kind == TYPE_C_UINT || t->kind == TYPE_C_ULONG ||
+         t->kind == TYPE_C_ULONGLONG || t->kind == TYPE_C_USHORT || t->kind == TYPE_C_UCHAR ||
+         (t->kind == TYPE_STRUCT && t->name &&
+          (0 == strcmp(t->name, "uint8_t") || 0 == strcmp(t->name, "uint16_t") ||
+           0 == strcmp(t->name, "uint32_t") || 0 == strcmp(t->name, "uint64_t") ||
+           0 == strcmp(t->name, "size_t"))));
+    return res;
+}
+
+int is_signed_type(Type *t)
+{
+    if (!t)
+    {
+        return 0;
+    }
+
+    if (t->kind == TYPE_ALIAS && !t->alias.is_opaque_alias)
+    {
+        return is_signed_type(t->inner);
+    }
+
+    int res =
+        (t->kind == TYPE_I8 || t->kind == TYPE_I16 || t->kind == TYPE_I32 || t->kind == TYPE_I64 ||
+         t->kind == TYPE_ISIZE || t->kind == TYPE_INT || t->kind == TYPE_I128 ||
+         t->kind == TYPE_BITINT || t->kind == TYPE_C_INT || t->kind == TYPE_C_LONG ||
+         t->kind == TYPE_C_LONGLONG || t->kind == TYPE_C_SHORT || t->kind == TYPE_C_CHAR ||
+         (t->kind == TYPE_STRUCT && t->name &&
+          (0 == strcmp(t->name, "int8_t") || 0 == strcmp(t->name, "int16_t") ||
+           0 == strcmp(t->name, "int32_t") || 0 == strcmp(t->name, "int64_t") ||
+           0 == strcmp(t->name, "ssize_t") || 0 == strcmp(t->name, "ptrdiff_t"))));
+    return res;
+}
+
+int is_boolean_type(Type *t)
+{
+    if (!t)
+    {
+        return 0;
+    }
+
+    if (t->kind == TYPE_ALIAS && !t->alias.is_opaque_alias)
+    {
+        return is_boolean_type(t->inner);
+    }
+
+    return (t->kind == TYPE_BOOL);
+}
+
 int is_float_type(Type *t)
 {
     if (!t)
@@ -208,6 +271,26 @@ int is_float_type(Type *t)
 
     int res = (t->kind == TYPE_FLOAT || t->kind == TYPE_F32 || t->kind == TYPE_F64);
     return res;
+}
+
+int is_composite_expression(ASTNode *node)
+{
+    if (!node)
+    {
+        return 0;
+    }
+
+    switch (node->type)
+    {
+    case NODE_EXPR_BINARY:
+        return 1;
+    case NODE_EXPR_UNARY:
+        return 1;
+    case NODE_TERNARY:
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 int type_eq(Type *a, Type *b)
@@ -703,25 +786,25 @@ static char *type_to_c_string_impl(Type *t)
 
     // Portable C Types (Map directly to C types)
     case TYPE_C_INT:
-        return xstrdup("int");
+        return xstrdup(g_config.misra_mode ? "int32_t" : "int");
     case TYPE_C_UINT:
-        return xstrdup("unsigned int");
+        return xstrdup(g_config.misra_mode ? "uint32_t" : "unsigned int");
     case TYPE_C_LONG:
-        return xstrdup("long");
+        return xstrdup(g_config.misra_mode ? "int64_t" : "long");
     case TYPE_C_ULONG:
-        return xstrdup("unsigned long");
+        return xstrdup(g_config.misra_mode ? "uint64_t" : "unsigned long");
     case TYPE_C_LONGLONG:
-        return xstrdup("long long");
+        return xstrdup(g_config.misra_mode ? "int64_t" : "long long");
     case TYPE_C_ULONGLONG:
-        return xstrdup("unsigned long long");
+        return xstrdup(g_config.misra_mode ? "uint64_t" : "unsigned long long");
     case TYPE_C_SHORT:
-        return xstrdup("short");
+        return xstrdup(g_config.misra_mode ? "int16_t" : "short");
     case TYPE_C_USHORT:
-        return xstrdup("unsigned short");
+        return xstrdup(g_config.misra_mode ? "uint16_t" : "unsigned short");
     case TYPE_C_CHAR:
-        return xstrdup("char");
+        return xstrdup(g_config.misra_mode ? "int8_t" : "char");
     case TYPE_C_UCHAR:
-        return xstrdup("unsigned char");
+        return xstrdup(g_config.misra_mode ? "uint8_t" : "unsigned char");
 
     case TYPE_INT:
         // 'int' in Zen C maps to 'i32' now for portability.

@@ -1139,6 +1139,10 @@ ASTNode *parse_if(ParserContext *ctx, Lexer *l)
     }
     else
     {
+        if (g_config.misra_mode)
+        {
+            zerror_at(lexer_peek(l), "MISRA Rule 15.6");
+        }
         // Single statement: Wrap in scope + block
         enter_scope(ctx);
         ASTNode *s = parse_statement(ctx, l);
@@ -1162,6 +1166,10 @@ ASTNode *parse_if(ParserContext *ctx, Lexer *l)
         }
         else
         {
+            if (g_config.misra_mode)
+            {
+                zerror_at(lexer_peek(l), "MISRA Rule 15.6");
+            }
             // Single statement else
             enter_scope(ctx);
             ASTNode *s = parse_statement(ctx, l);
@@ -1198,6 +1206,11 @@ ASTNode *parse_while(ParserContext *ctx, Lexer *l)
     }
     else
     {
+        if (g_config.misra_mode)
+        {
+            zerror_at(lexer_peek(l), "MISRA Rule 15.6"
+                                     "compound-statement body");
+        }
         body = parse_statement(ctx, l);
     }
     ASTNode *n = ast_create(NODE_WHILE);
@@ -1303,6 +1316,10 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
                     }
                     else
                     {
+                        if (g_config.misra_mode)
+                        {
+                            zerror_at(lexer_peek(l), "MISRA Rule 15.6");
+                        }
                         user_body = parse_statement(ctx, l);
                     }
                     exit_scope(ctx);
@@ -1846,10 +1863,10 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
     else
     {
         // Empty condition = true
-        ASTNode *true_lit = ast_create(NODE_EXPR_LITERAL);
-        true_lit->literal.type_kind = LITERAL_INT;
-        true_lit->literal.int_val = 1;
-        cond = true_lit;
+        ASTNode *true_var = ast_create(NODE_EXPR_VAR);
+        true_var->var_ref.name = xstrdup("true");
+        true_var->token = for_token;
+        cond = true_var;
     }
     if (lexer_peek(l).type == TOK_SEMICOLON)
     {
@@ -1874,6 +1891,11 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
     }
     else
     {
+        if (g_config.misra_mode)
+        {
+            zerror_at(lexer_peek(l), "MISRA Rule 15.6"
+                                     "compound-statement body");
+        }
         body = parse_statement(ctx, l);
     }
     exit_scope(ctx);

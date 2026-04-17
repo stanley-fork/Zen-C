@@ -1,0 +1,15 @@
+// MISRA Rule 13.1 Verification
+// EXPECT: MISRA Rule 13.1
+// EXPECT: MISRA Rule 13.1
+
+fn effect() -> int {
+    return 1;
+}
+
+fn main() {
+    let i = 0;
+    // Violation: Assignment side effect in initializer list
+    let arr = [i++, 2, 3];       
+    // Violation: Function call side effect in initializer list
+    let tup = (effect(), 2);     
+}

@@ -12,15 +12,16 @@ typedef struct FuncSig FuncSig;
  */
 typedef enum
 {
-    SYM_VARIABLE, ///< Local or global variable.
-    SYM_FUNCTION, ///< Function or method.
-    SYM_STRUCT,   ///< Struct definition.
-    SYM_ENUM,     ///< Enum definition.
-    SYM_ALIAS,    ///< Type alias (typedef).
-    SYM_CONSTANT, ///< Constant value.
-    SYM_MODULE,   ///< Module/Namespace.
-    SYM_TRAIT,    ///< Trait definition.
-    SYM_PRIMITIVE ///< Built-in primitive type.
+    SYM_VARIABLE,  ///< Local or global variable.
+    SYM_FUNCTION,  ///< Function or method.
+    SYM_STRUCT,    ///< Struct definition.
+    SYM_ENUM,      ///< Enum definition.
+    SYM_ALIAS,     ///< Type alias (typedef).
+    SYM_CONSTANT,  ///< Constant value.
+    SYM_MODULE,    ///< Module/Namespace.
+    SYM_TRAIT,     ///< Trait definition.
+    SYM_PRIMITIVE, ///< Built-in primitive type.
+    SYM_LABEL      ///< Goto label.
 } SymbolKind;
 
 /**
@@ -42,6 +43,7 @@ typedef struct ZenSymbol
     int is_def;          ///< 1 if definition vs declaration.
     int const_int_val;   ///< Integer value if constant.
     int is_moved;        ///< 1 if ownership transferred.
+    int is_written_to;   ///< 1 if the value (or dereferenced memory) was modified.
     char *cfg_condition; ///< Optional @cfg condition.
 
     union

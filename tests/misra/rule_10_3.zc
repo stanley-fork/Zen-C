@@ -1,0 +1,50 @@
+// MISRA Rule 10.3 Verification
+// EXPECT: MISRA Rule 10.3
+// EXPECT: MISRA Rule 10.3
+// EXPECT: MISRA Rule 10.3
+// EXPECT: MISRA Rule 10.3
+// EXPECT: MISRA Rule 10.3
+// EXPECT: MISRA Rule 10.3
+
+fn test_narrowing() {
+    let u32_val: u32 = 1000;
+    // Violation: Implicit narrowing
+    let u8_val: u8 = u32_val; 
+}
+
+fn test_category() {
+    let u32_val: u32 = 100;
+    // Violation: signed vs unsigned category
+    let i32_val: i32 = u32_val; 
+}
+
+fn test_bool() {
+    let i32_val: i32 = 1;
+    // Violation: numeric to boolean
+    let b: bool = i32_val;
+}
+
+fn test_composite() {
+    let u16_a: u16 = 10;
+    let u16_b: u16 = 20;
+
+    // Violation: widening of composite result
+    let fail1: u32 = u16_a + u16_b;
+    let fail2: u64 = u16_a * u16_b / 2u16;
+}
+
+fn test_param_passing(val: u32) {}
+
+fn test_call_site() {
+    let u16_a: u16 = 10;
+    // Violation in argument passing
+    test_param_passing(u16_a + 5u16);
+}
+
+fn main() {
+    test_narrowing();
+    test_category();
+    test_bool();
+    test_composite();
+    test_call_site();
+}

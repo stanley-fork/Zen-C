@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../platform/misra.h"
 
 static void emit_freestanding_preamble(FILE *out)
 {
@@ -88,6 +89,11 @@ static void emit_freestanding_preamble(FILE *out)
 
 void emit_preamble(ParserContext *ctx, FILE *out)
 {
+    if (g_config.misra_mode)
+    {
+        emit_misra_preamble(out);
+        return;
+    }
     if (g_config.is_freestanding)
     {
         emit_freestanding_preamble(out);
@@ -1612,7 +1618,7 @@ int emit_tests_and_runner(ParserContext *ctx, ASTNode *node, FILE *out)
 // Emit type definitions-
 void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes)
 {
-    if (!g_config.is_freestanding)
+    if (!g_config.is_freestanding && !g_config.misra_mode)
     {
         fprintf(out, "typedef char* string;\n");
 
@@ -1654,8 +1660,8 @@ void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes)
     }
     else
     {
-        fprintf(out, "static inline long _z_check_bounds(long index, long limit) { if (index < 0 "
-                     "|| index >= limit) { __builtin_trap(); } return index; }\n");
+        fprintf(out, "static inline long _z_check_bounds(long index, long limit) { if((index < 0) "
+                     "|| (index >= limit)) { __builtin_trap(); } return index; }\n");
     }
 
     ASTNode *local = nodes;
@@ -1786,6 +1792,9 @@ void emit_source_mapping(ASTNode *node, FILE *out)
     last_source_mapping_line = node->token.line;
     last_source_mapping_type = node->type;
 
-    char *safe_file = sanitize_path_for_c_string(node->token.file);
-    fprintf(out, "\n#line %i \"%s\"\n", node->token.line, safe_file);
+    if (!g_config.misra_mode)
+    {
+        char *safe_file = sanitize_path_for_c_string(node->token.file);
+        fprintf(out, "\n#line %i \"%s\"\n", node->token.line, safe_file);
+    }
 }

@@ -1,0 +1,13 @@
+// MISRA Rule 15.7 Verification
+// EXPECT: MISRA Rule 15.7
+
+fn main() {
+    let x = 10;
+    
+    // Violation: if-else-if chain without terminal else
+    if x > 10 {
+        x = 1;
+    } else if x < 5 {
+        x = 2;
+    }
+}

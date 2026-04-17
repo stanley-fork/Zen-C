@@ -227,6 +227,11 @@ int main(int argc, char **argv)
         {
             g_config.use_typecheck = 1;
         }
+        else if (strcmp(arg, "--misra") == 0)
+        {
+            g_config.misra_mode = 1;
+            g_config.use_typecheck = 1;
+        }
         else if (strcmp(arg, "--freestanding") == 0)
         {
             g_config.is_freestanding = 1;

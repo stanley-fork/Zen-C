@@ -51,6 +51,7 @@ SRCS = src/main.c \
        src/platform/os.c \
        src/platform/console.c \
        src/platform/dylib.c \
+       src/platform/misra.c \
        src/utils/config.c \
        src/diagnostics/diagnostics.c \
        src/lexer/token.c \
@@ -238,6 +239,10 @@ test: $(TARGET) $(PLUGINS)
 	./tests/scripts/run_tests.sh -- $(filter %.zc,$(only))
 	./tests/scripts/run_codegen_tests.sh $(filter %.zc,$(only))
 	./tests/scripts/run_example_transpile.sh $(filter %.zc,$(only))
+	$(MAKE) test-misra
+
+test-misra: $(TARGET)
+	./tests/scripts/run_misra_tests.sh
 
 test-tcc: $(TARGET) $(PLUGINS)
 	./tests/scripts/run_tests.sh --cc tcc

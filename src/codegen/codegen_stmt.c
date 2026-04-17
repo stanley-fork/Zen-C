@@ -333,58 +333,71 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
     int first = 1;
     while (c)
     {
+        int is_wildcard = (strcmp(c->match_case.pattern, "_") == 0);
+        int is_final_wildcard = (is_wildcard && c->next == NULL);
+
         if (!first)
         {
             fprintf(out, " else ");
         }
+
         emit_source_mapping(c, out); // Step through match cases elegantly
-        fprintf(out, "if (");
-        if (strcmp(c->match_case.pattern, "_") == 0)
-        {
-            fprintf(out, "1");
-        }
-        else if (is_option)
-        {
-            int m_is_ptr = has_ref_binding || (expr_type && strchr(expr_type, '*'));
-            const char *acc = m_is_ptr ? "->" : ".";
 
-            if (strcmp(c->match_case.pattern, "Some") == 0)
-            {
-                fprintf(out, "_m_%d%sis_some", id, acc);
-            }
-            else if (strcmp(c->match_case.pattern, "None") == 0)
-            {
-                fprintf(out, "!_m_%d%sis_some", id, acc);
-            }
-            else
+        if (!is_final_wildcard || first)
+        {
+            fprintf(out, "if (");
+            if (is_wildcard)
             {
                 fprintf(out, "1");
             }
-        }
-        else if (is_result)
-        {
-            int m_is_ptr = has_ref_binding || (expr_type && strchr(expr_type, '*'));
-            const char *acc = m_is_ptr ? "->" : ".";
+            else if (is_option)
+            {
+                int m_is_ptr = has_ref_binding || (expr_type && strchr(expr_type, '*'));
+                const char *acc = m_is_ptr ? "->" : ".";
 
-            if (strcmp(c->match_case.pattern, "Ok") == 0)
-            {
-                fprintf(out, "_m_%d%sis_ok", id, acc);
+                if (strcmp(c->match_case.pattern, "Some") == 0)
+                {
+                    fprintf(out, "_m_%d%sis_some", id, acc);
+                }
+                else if (strcmp(c->match_case.pattern, "None") == 0)
+                {
+                    fprintf(out, "!_m_%d%sis_some", id, acc);
+                }
+                else
+                {
+                    fprintf(out, "1");
+                }
             }
-            else if (strcmp(c->match_case.pattern, "Err") == 0)
+            else if (is_result)
             {
-                fprintf(out, "!_m_%d%sis_ok", id, acc);
+                int m_is_ptr = has_ref_binding || (expr_type && strchr(expr_type, '*'));
+                const char *acc = m_is_ptr ? "->" : ".";
+
+                if (strcmp(c->match_case.pattern, "Ok") == 0)
+                {
+                    fprintf(out, "_m_%d%sis_ok", id, acc);
+                }
+                else if (strcmp(c->match_case.pattern, "Err") == 0)
+                {
+                    fprintf(out, "!_m_%d%sis_ok", id, acc);
+                }
+                else
+                {
+                    fprintf(out, "1");
+                }
             }
             else
             {
-                fprintf(out, "1");
+                // Use helper for OR patterns, range patterns, and simple patterns
+                emit_pattern_condition(ctx, c->match_case.pattern, id, has_ref_binding, out);
             }
         }
-        else
+
+        if (!is_final_wildcard || first)
         {
-            // Use helper for OR patterns, range patterns, and simple patterns
-            emit_pattern_condition(ctx, c->match_case.pattern, id, has_ref_binding, out);
+            fprintf(out, ") ");
         }
-        fprintf(out, ") { ");
+        fprintf(out, "{ ");
         if (c->match_case.binding_count > 0)
         {
             for (int i = 0; i < c->match_case.binding_count; i++)
@@ -541,10 +554,18 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
 
     if (is_expr)
     {
+        if (g_config.misra_mode && !has_wildcard)
+        {
+            fprintf(out, " else { } /* MISRA 15.7 */ ");
+        }
         fprintf(out, " _r_%d; })", id);
     }
     else
     {
+        if (g_config.misra_mode && !has_wildcard)
+        {
+            fprintf(out, " else { } /* MISRA 15.7 */ ");
+        }
         fprintf(out, " }");
     }
 }
@@ -804,6 +825,12 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
         }
         emit_func_signature(ctx, out, node, NULL);
         fprintf(out, "\n{\n");
+        if (g_config.misra_mode && node->func.ret_type && strcmp(node->func.ret_type, "void") != 0)
+        {
+            char *safe_ret_type = type_to_c_string(node->func.ret_type_info);
+            fprintf(out, "    %s _misra_ret = 0;\n", safe_ret_type);
+            free(safe_ret_type);
+        }
         char *prev_ret = g_current_func_ret_type;
         Type *prev_ret_info = g_current_func_ret_type_info;
         g_current_func_ret_type = node->func.ret_type;
@@ -905,6 +932,19 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
         g_current_func_ret_type_info = prev_ret_info;
         ctx->self_is_pointer = prev_self_is_ptr;
 
+        if (g_config.misra_mode)
+        {
+            fprintf(out, "    goto _misra_end_of_func;\n");
+            fprintf(out, "_misra_end_of_func:\n");
+            if (node->func.ret_type && strcmp(node->func.ret_type, "void") != 0)
+            {
+                fprintf(out, "    return _misra_ret;\n");
+            }
+            else
+            {
+                fprintf(out, "    return;\n");
+            }
+        }
         fprintf(out, "}\n");
         if (node->cfg_condition)
         {
@@ -1377,25 +1417,61 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
         fprintf(out, "if (");
         codegen_expression(ctx, node->if_stmt.condition, out);
         fprintf(out, ") ");
+        if (g_config.misra_mode && node->if_stmt.then_body->type != NODE_BLOCK)
+        {
+            fprintf(out, "{\n");
+        }
         codegen_node_single(ctx, node->if_stmt.then_body, out);
+        if (g_config.misra_mode && node->if_stmt.then_body->type != NODE_BLOCK)
+        {
+            fprintf(out, "\n}");
+        }
         if (node->if_stmt.else_body)
         {
             emit_source_mapping(node->if_stmt.else_body, out);
             fprintf(out, " else ");
+            if (g_config.misra_mode && node->if_stmt.else_body->type != NODE_BLOCK)
+            {
+                fprintf(out, "{\n");
+            }
             codegen_node_single(ctx, node->if_stmt.else_body, out);
+            if (g_config.misra_mode && node->if_stmt.else_body->type != NODE_BLOCK)
+            {
+                fprintf(out, "\n}");
+            }
+        }
+        else if (g_config.misra_mode)
+        {
+            fprintf(out, " else { } /* MISRA */ ");
         }
         break;
     case NODE_UNLESS:
         fprintf(out, "if (!(");
         codegen_expression(ctx, node->unless_stmt.condition, out);
         fprintf(out, ")) ");
+        if (g_config.misra_mode && node->unless_stmt.body->type != NODE_BLOCK)
+        {
+            fprintf(out, "{\n");
+        }
         codegen_node_single(ctx, node->unless_stmt.body, out);
+        if (g_config.misra_mode && node->unless_stmt.body->type != NODE_BLOCK)
+        {
+            fprintf(out, "\n}");
+        }
         break;
     case NODE_GUARD:
         fprintf(out, "if (!(");
         codegen_expression(ctx, node->guard_stmt.condition, out);
         fprintf(out, ")) ");
+        if (g_config.misra_mode && node->guard_stmt.body->type != NODE_BLOCK)
+        {
+            fprintf(out, "{\n");
+        }
         codegen_node_single(ctx, node->guard_stmt.body, out);
+        if (g_config.misra_mode && node->guard_stmt.body->type != NODE_BLOCK)
+        {
+            fprintf(out, "\n}");
+        }
         break;
     case NODE_WHILE:
     {
@@ -1416,7 +1492,15 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
         }
         else
         {
+            if (g_config.misra_mode && node->while_stmt.body->type != NODE_BLOCK)
+            {
+                fprintf(out, "{\n");
+            }
             codegen_node_single(ctx, node->while_stmt.body, out);
+            if (g_config.misra_mode && node->while_stmt.body->type != NODE_BLOCK)
+            {
+                fprintf(out, "\n}");
+            }
         }
         loop_depth--;
         if (node->while_stmt.loop_label)
@@ -1477,7 +1561,15 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
         }
         else
         {
+            if (g_config.misra_mode && node->for_stmt.body->type != NODE_BLOCK)
+            {
+                fprintf(out, "{\n");
+            }
             codegen_node_single(ctx, node->for_stmt.body, out);
+            if (g_config.misra_mode && node->for_stmt.body->type != NODE_BLOCK)
+            {
+                fprintf(out, "\n}");
+            }
         }
         loop_depth--;
         if (node->for_stmt.loop_label)
@@ -1954,7 +2046,15 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                 ASTNode *def = find_struct_def(ctx, clean);
                 if (def && def->type_info && def->type_info->traits.has_drop)
                 {
-                    fprintf(out, "    return ({ ");
+                    if (g_config.misra_mode)
+                    {
+                        fprintf(out, "    _misra_ret = ({ ");
+                    }
+                    else
+                    {
+                        fprintf(out, "    return ({ ");
+                    }
+
                     if (z_path_match_compiler(g_config.cc, "tcc"))
                     {
                         fprintf(out, "__typeof__(");
@@ -1988,6 +2088,11 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                         codegen_node_single(ctx, defer_stack[i], out);
                     }
                     fprintf(out, "_z_ret_mv; });\n");
+
+                    if (g_config.misra_mode)
+                    {
+                        fprintf(out, "    goto _misra_end_of_func;\n");
+                    }
                     handled = 1;
                 }
                 free(tname);
@@ -2027,7 +2132,14 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                     emit_source_mapping_duplicate(defer_stack[i], out);
                     codegen_node_single(ctx, defer_stack[i], out);
                 }
-                fprintf(out, "return _z_ret; }\n");
+                if (g_config.misra_mode)
+                {
+                    fprintf(out, "_misra_ret = _z_ret; goto _misra_end_of_func; }\n");
+                }
+                else
+                {
+                    fprintf(out, "return _z_ret; }\n");
+                }
             }
             else if (has_defers)
             {
@@ -2036,11 +2148,33 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                     emit_source_mapping_duplicate(defer_stack[i], out);
                     codegen_node_single(ctx, defer_stack[i], out);
                 }
-                fprintf(out, "    return;\n");
+                if (g_config.misra_mode)
+                {
+                    fprintf(out, "    goto _misra_end_of_func;\n");
+                }
+                else
+                {
+                    fprintf(out, "    return;\n");
+                }
             }
             else
             {
-                fprintf(out, "    return ");
+                if (g_config.misra_mode)
+                {
+                    if (g_current_func_ret_type && strcmp(g_current_func_ret_type, "void") != 0)
+                    {
+                        fprintf(out, "    _misra_ret = ");
+                    }
+                    else
+                    {
+                        fprintf(out, "    ");
+                    }
+                }
+                else
+                {
+                    fprintf(out, "    return ");
+                }
+
                 if (node->ret.value && node->ret.value->type == NODE_EXPR_VAR &&
                     ctx->self_is_pointer && strcmp(node->ret.value->var_ref.name, "self") == 0)
                 {
@@ -2055,10 +2189,21 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                     // return &self; -> return self; (since self is already a pointer in C)
                     codegen_expression(ctx, node->ret.value->unary.operand, out);
                     fprintf(out, ";\n");
+                    if (g_config.misra_mode)
+                    {
+                        fprintf(out, "    goto _misra_end_of_func;\n");
+                    }
                     break;
                 }
-                codegen_expression(ctx, node->ret.value, out);
+                if (node->ret.value)
+                {
+                    codegen_expression(ctx, node->ret.value, out);
+                }
                 fprintf(out, ";\n");
+                if (g_config.misra_mode)
+                {
+                    fprintf(out, "    goto _misra_end_of_func;\n");
+                }
             }
         }
         break;

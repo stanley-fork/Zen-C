@@ -585,7 +585,17 @@ void add_symbol_with_token(ParserContext *ctx, const char *n, const char *t, Typ
             {
                 if (strcmp(sh->name, n) == 0 && !ctx->silent_warnings)
                 {
-                    warn_shadowing(tok, n);
+                    if (g_config.misra_mode)
+                    {
+                        char msg[MAX_SHORT_MSG_LEN];
+                        (void)n;
+                        snprintf(msg, sizeof(msg), "MISRA Rule 5.3");
+                        zerror_at(tok, msg);
+                    }
+                    else
+                    {
+                        warn_shadowing(tok, n);
+                    }
                     break;
                 }
                 sh = sh->next;
@@ -2081,6 +2091,17 @@ Type *type_from_string_helper(const char *c)
         free(base);
 
         return type_new_ptr(inner);
+    }
+
+    // Check for 'const ' prefix
+    if (strncmp(c, "const ", 6) == 0)
+    {
+        Type *inner = type_from_string_helper(c + 6);
+        if (inner)
+        {
+            inner->is_const = 1;
+        }
+        return inner;
     }
 
     if (strncmp(c, "struct ", 7) == 0)

@@ -1,0 +1,17 @@
+// MISRA Rule 13.6 Verification
+// EXPECT: MISRA Rule 13.6
+// EXPECT: MISRA Rule 13.6
+
+fn effect() -> int {
+    return 1;
+}
+
+fn main() {
+    let i = 0;
+    // Violation: increment side effect in sizeof
+    let s1 = sizeof(i++);        
+    // Violation: function call side effect in sizeof
+    let s2 = sizeof(effect());   
+    
+    let s3 = sizeof(i + 1);      // OK
+}

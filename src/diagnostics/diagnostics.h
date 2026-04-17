@@ -96,6 +96,7 @@ void warn_array_bounds(Token t, int index, int size);
 void warn_format_string(Token t, int arg_num, const char *expected, const char *got);
 void warn_null_pointer(Token t, const char *expr);
 void warn_void_main(Token t);
+void warn_misra_violation(Token t, const char *msg);
 
 typedef enum
 {
@@ -138,6 +139,8 @@ typedef enum
     DIAG_STYLE_FORMAT,           // W701
     DIAG_STYLE_DEPRECATED_VAR,   // W702
     DIAG_STYLE_DEPRECATED_CONST, // W703
+    // MISRA
+    DIAG_MISRA_VIOLATION,
     // ...
     DIAG_MAX
 } DiagnosticID;

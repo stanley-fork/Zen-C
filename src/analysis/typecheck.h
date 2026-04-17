@@ -34,7 +34,9 @@ typedef struct TypeChecker
     int move_checks_only; ///< If true, only report move semantics violations (no type errors).
 
     // Tracking
-    int is_assign_lhs; ///< If true, currently evaluating LHS of assignment.
+    int is_assign_lhs;    ///< If true, currently evaluating LHS of assignment.
+    int is_stmt_context;  ///< If true, expression is a top-level statement.
+    int loop_break_count; ///< Count of breaks for Rule 15.4
 } TypeChecker;
 
 /**
@@ -67,5 +69,8 @@ int check_moves_only(ParserContext *ctx, ASTNode *root);
 void tc_error(TypeChecker *tc, Token t, const char *msg);
 void tc_error_with_hints(TypeChecker *tc, Token t, const char *msg, const char *const *hints);
 void tc_move_error_with_hints(TypeChecker *tc, Token t, const char *msg, const char *const *hints);
+
+// Exported helpers for modularization
+Type *resolve_alias(Type *t);
 
 #endif // TYPECHECK_H

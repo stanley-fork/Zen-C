@@ -250,6 +250,7 @@ typedef struct
     int no_suppress_warnings; ///< 1 if --no-suppress-warnings (disable default C warning
                               ///< suppressions).
     int warn_pedantic;        ///< 1 if -Wpedantic or --pedantic (show extra diagnostics).
+    int misra_mode;           ///< 1 if --misra (emit MISRA C compliant code).
     uint64_t diag_mask;       ///< Bitmask of enabled diagnostics.
 
     int keep_comments; ///< 1 if --keep-comments (preserve comments in output).

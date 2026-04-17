@@ -1369,7 +1369,7 @@ static ASTNode *parse_int_literal(Token t)
         val = strtoull(s, &endptr, 10);
     }
 
-    // Validate suffix
+    // Validate and apply suffix
     if (endptr && *endptr)
     {
         if (!is_valid_int_suffix(endptr))
@@ -1378,13 +1378,79 @@ static ASTNode *parse_int_literal(Token t)
             snprintf(err, sizeof(err), "Invalid integer literal suffix: '%s'", endptr);
             zpanic_at(t, "%s", err);
         }
+
+        // Apply type from suffix
+        if (strcasecmp(endptr, "u") == 0)
+        {
+            node->type_info->kind = TYPE_UINT;
+        }
+        else if (strcasecmp(endptr, "l") == 0)
+        {
+            node->type_info->kind = TYPE_C_LONG;
+        }
+        else if (strcasecmp(endptr, "ll") == 0)
+        {
+            node->type_info->kind = TYPE_C_LONGLONG;
+        }
+        else if (strcasecmp(endptr, "ul") == 0 || strcasecmp(endptr, "lu") == 0)
+        {
+            node->type_info->kind = TYPE_C_ULONG;
+        }
+        else if (strcasecmp(endptr, "ull") == 0 || strcasecmp(endptr, "llu") == 0)
+        {
+            node->type_info->kind = TYPE_C_ULONGLONG;
+        }
+        else if (strcmp(endptr, "u8") == 0)
+        {
+            node->type_info->kind = TYPE_U8;
+        }
+        else if (strcmp(endptr, "u16") == 0)
+        {
+            node->type_info->kind = TYPE_U16;
+        }
+        else if (strcmp(endptr, "u32") == 0)
+        {
+            node->type_info->kind = TYPE_U32;
+        }
+        else if (strcmp(endptr, "u64") == 0)
+        {
+            node->type_info->kind = TYPE_U64;
+        }
+        else if (strcmp(endptr, "usize") == 0)
+        {
+            node->type_info->kind = TYPE_USIZE;
+        }
+        else if (strcmp(endptr, "i8") == 0)
+        {
+            node->type_info->kind = TYPE_I8;
+        }
+        else if (strcmp(endptr, "i16") == 0)
+        {
+            node->type_info->kind = TYPE_I16;
+        }
+        else if (strcmp(endptr, "i32") == 0)
+        {
+            node->type_info->kind = TYPE_I32;
+        }
+        else if (strcmp(endptr, "i64") == 0)
+        {
+            node->type_info->kind = TYPE_I64;
+        }
+        else if (strcmp(endptr, "isize") == 0)
+        {
+            node->type_info->kind = TYPE_ISIZE;
+        }
+    }
+    else
+    {
+        // No suffix: default to int or i64 if too large
+        if (val > 2147483647ULL)
+        {
+            node->type_info->kind = TYPE_I64;
+        }
     }
 
     node->literal.int_val = val;
-    if (val > 2147483647ULL)
-    {
-        node->type_info->kind = TYPE_I64;
-    }
     free(s);
     return node;
 }
@@ -1605,7 +1671,7 @@ static ASTNode *parse_char_literal(Token t)
 }
 
 // Parse sizeof expression: sizeof(type) or sizeof(expr)
-static ASTNode *parse_sizeof_expr(ParserContext *ctx, Lexer *l)
+static ASTNode *parse_sizeof_expr(ParserContext *ctx, Lexer *l, Token sizeof_tk)
 {
     if (lexer_peek(l).type != TOK_LPAREN)
     {
@@ -1646,6 +1712,7 @@ static ASTNode *parse_sizeof_expr(ParserContext *ctx, Lexer *l)
         lexer_next(l);
         char *ts = type_to_string(ty);
         node = ast_create(NODE_EXPR_SIZEOF);
+        node->token = sizeof_tk;
         node->size_of.target_type = ts;
         node->size_of.target_type_info = ty;
         node->size_of.is_type = 1;
@@ -1667,6 +1734,7 @@ static ASTNode *parse_sizeof_expr(ParserContext *ctx, Lexer *l)
             zpanic_at(lexer_peek(l), "Expected ) after sizeof identifier");
         }
         node = ast_create(NODE_EXPR_SIZEOF);
+        node->token = sizeof_tk;
         node->size_of.target_type = NULL;
         node->size_of.target_type_info = NULL;
         node->size_of.is_type = 0;
@@ -1888,7 +1956,7 @@ static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
 
     else if (t.type == TOK_SIZEOF)
     {
-        node = parse_sizeof_expr(ctx, l);
+        node = parse_sizeof_expr(ctx, l, t);
     }
 
     else if (t.type == TOK_IDENT && strncmp(t.start, "typeof", 6) == 0 && t.len == 6)
@@ -4124,6 +4192,7 @@ static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
             zpanic_at(lexer_peek(l), "Expected ] after array literal");
         }
         node = ast_create(NODE_EXPR_ARRAY_LITERAL);
+        node->token = t;
         node->array_literal.elements = head;
         node->array_literal.count = count;
         if (head && head->type_info)
@@ -5465,7 +5534,7 @@ static ASTNode *parse_expr_prec_impl(ParserContext *ctx, Lexer *l, Precedence mi
     else if (is_token(t, "sizeof"))
     {
         lexer_next(l); // consume sizeof
-        lhs = parse_sizeof_expr(ctx, l);
+        lhs = parse_sizeof_expr(ctx, l, t);
     }
     else
     {
@@ -5495,6 +5564,7 @@ static ASTNode *parse_expr_prec_impl(ParserContext *ctx, Lexer *l, Precedence mi
         {
             lexer_next(l); // consume ++ or --
             ASTNode *node = ast_create(NODE_EXPR_UNARY);
+            node->token = op;
             node->unary.op = (op.start[0] == '+') ? xstrdup("_post++") : xstrdup("_post--");
             node->unary.operand = lhs;
             node->type_info = lhs->type_info;

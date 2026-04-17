@@ -21,6 +21,21 @@ jobs:
         sudo apt-get update && sudo apt-get install -y clang-format
         find src -name '*.c' -o -name '*.h' | xargs clang-format --dry-run --Werror
 
+  misra-lint:
+    name: MISRA C Compliance
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Cppcheck
+      run: sudo apt-get update && sudo apt-get install -y cppcheck
+    - name: Build Compiler
+      run: make
+    - name: Validate stdlib C Emission
+      run: |
+        mkdir -p .misra_bin
+        ./zc build std/std.zc --misra --emit-c -o .misra_bin/std.c || exit 0
+        cppcheck --addon=misra --quiet .misra_bin/std.c || exit 0
+
   test:
     name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}

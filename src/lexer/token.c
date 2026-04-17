@@ -394,6 +394,12 @@ Token lexer_next(Lexer *l)
         }
         else
         {
+            if (s[0] == '0' && isdigit(s[1]) && g_config.misra_mode)
+            {
+                // Rule 7.1: Octal constants shall not be used (and leading zeros are disallowed).
+                zerror_at((Token){TOK_INT, s, 2, start_line, start_col, g_current_filename},
+                          "MISRA Rule 7.1");
+            }
             while (isdigit(s[len]) || s[len] == '_')
             {
                 len++;
