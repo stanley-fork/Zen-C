@@ -68,6 +68,7 @@ void zpanic(const char *fmt, ...)
         vsnprintf(msg, sizeof(msg), fmt, a);
         va_end(a);
         emit_json("error", (Token){0}, msg, NULL, DIAG_NONE);
+        g_error_count++;
         if (g_config.mode_lsp)
         {
             return;
@@ -80,6 +81,7 @@ void zpanic(const char *fmt, ...)
     vfprintf(stderr, fmt, a);
     fprintf(stderr, COLOR_RESET "\n");
     va_end(a);
+    g_error_count++;
     if (g_config.mode_lsp)
     {
         return;
@@ -332,6 +334,7 @@ void zpanic_at(Token t, const char *fmt, ...)
     fprintf(stderr, COLOR_RED "^ here" COLOR_RESET "\n");
     fprintf(stderr, COLOR_BLUE "   |\n" COLOR_RESET);
 
+    g_error_count++;
     if (g_parser_ctx && g_parser_ctx->is_fault_tolerant && g_parser_ctx->on_error)
     {
         // Construct error message buffer
@@ -366,6 +369,7 @@ void zpanic_with_suggestion(Token t, const char *msg, const char *suggestion)
                      suggestion ? suggestion : "");
             g_parser_ctx->had_error = 1;
             g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
+            g_error_count++;
             return;
         }
         if (g_config.mode_lsp)
@@ -398,6 +402,7 @@ void zpanic_with_suggestion(Token t, const char *msg, const char *suggestion)
         fprintf(stderr, " ");
     }
     fprintf(stderr, COLOR_RED "^ here" COLOR_RESET "\n");
+    g_error_count++;
 
     // Suggestion.
     if (suggestion)
@@ -540,6 +545,7 @@ void zerror_at(Token t, const char *fmt, ...)
         vsnprintf(msg, sizeof(msg), fmt, a);
         va_end(a);
         emit_json("error", t, msg, NULL, DIAG_NONE);
+        g_error_count++;
         if (g_parser_ctx && g_parser_ctx->on_error)
         {
             g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, msg);
@@ -594,12 +600,14 @@ void zerror_at(Token t, const char *fmt, ...)
 
         g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, msg);
     }
+    g_error_count++;
 }
 
 void zerror_with_suggestion(Token t, const char *msg, const char *suggestion)
 {
     if (g_config.json_output)
     {
+        g_error_count++;
         emit_json("error", t, msg, suggestion, DIAG_NONE);
         if (g_parser_ctx && g_parser_ctx->on_error)
         {
@@ -652,6 +660,7 @@ void zerror_with_suggestion(Token t, const char *msg, const char *suggestion)
                  suggestion ? suggestion : "");
         g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
     }
+    g_error_count++;
 }
 
 void zerror_with_hints(Token t, const char *msg, const char *const *hints)
@@ -684,6 +693,7 @@ void zerror_with_hints(Token t, const char *msg, const char *const *hints)
             }
             g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
         }
+        g_error_count++;
         return;
     }
 
@@ -739,6 +749,7 @@ void zerror_with_hints(Token t, const char *msg, const char *const *hints)
         }
         g_parser_ctx->on_error(g_parser_ctx->error_callback_data, t, full_msg);
     }
+    g_error_count++;
 }
 
 // Specific error types with helpful messages.

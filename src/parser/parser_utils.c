@@ -1,10 +1,15 @@
 #include "../codegen/codegen.h"
 #include "../plugins/plugin_manager.h"
 #include "parser.h"
+#include "platform/misra.h"
 #include "../constants.h"
 #include "../ast/primitives.h"
 #include <ctype.h>
 #include "analysis/const_fold.h"
+
+// Forward declaration
+static void audit_section_5(ParserContext *ctx, Scope *scope, const char *name,
+                            const char *link_name, Token tok);
 
 static int is_unmangle_primitive(const char *base);
 
@@ -575,37 +580,9 @@ void add_symbol_with_token(ParserContext *ctx, const char *n, const char *t, Typ
         ctx->current_scope = ctx->global_scope;
     }
 
-    if (n[0] != '_' && ctx->current_scope->parent && strcmp(n, "it") != 0 && strcmp(n, "self") != 0)
+    if (strcmp(n, "it") != 0 && strcmp(n, "self") != 0)
     {
-        Scope *p = ctx->current_scope->parent;
-        while (p)
-        {
-            ZenSymbol *sh = p->symbols;
-            while (sh)
-            {
-                if (strcmp(sh->name, n) == 0 && !ctx->silent_warnings)
-                {
-                    if (g_config.misra_mode)
-                    {
-                        char msg[MAX_SHORT_MSG_LEN];
-                        (void)n;
-                        snprintf(msg, sizeof(msg), "MISRA Rule 5.3");
-                        zerror_at(tok, msg);
-                    }
-                    else
-                    {
-                        warn_shadowing(tok, n);
-                    }
-                    break;
-                }
-                sh = sh->next;
-            }
-            if (sh)
-            {
-                break; // found it
-            }
-            p = p->parent;
-        }
+        audit_section_5(ctx, ctx->current_scope, n, NULL, tok);
     }
 
     // In LSP mode, check for existing symbol in the current scope to avoid duplicates
@@ -673,7 +650,7 @@ void init_builtins()
 
 void register_func(ParserContext *ctx, Scope *scope, const char *name, int count, char **defaults,
                    Type **arg_types, Type *ret_type, int is_varargs, int is_async, int is_pure,
-                   Token decl_token)
+                   const char *link_name, Token decl_token)
 {
     // In LSP mode, check for existing function in the registry to avoid duplicates
     if (g_config.mode_lsp)
@@ -718,7 +695,11 @@ void register_func(ParserContext *ctx, Scope *scope, const char *name, int count
     f->required = 0;
 
     // Unified logic: check for existing symbol to avoid duplicates
-    ZenSymbol *sym = symbol_lookup_local(scope ? scope : ctx->current_scope, name);
+    Scope *target_scope = scope ? scope : ctx->current_scope;
+    audit_section_5(ctx, target_scope ? target_scope : ctx->global_scope, name, link_name,
+                    decl_token);
+
+    ZenSymbol *sym = symbol_lookup_local(target_scope, name);
     if (!sym)
     {
         sym = symbol_add(scope ? scope : ctx->current_scope, name, SYM_FUNCTION);
@@ -729,6 +710,11 @@ void register_func(ParserContext *ctx, Scope *scope, const char *name, int count
     }
     sym->data.sig = f;
     sym->decl_token = decl_token;
+    if (link_name)
+    {
+        f->link_name = xstrdup(link_name);
+        sym->link_name = f->link_name;
+    }
 
     register_symbol_to_lsp(ctx, sym);
 
@@ -920,6 +906,7 @@ void register_type_alias(ParserContext *ctx, const char *alias, const char *orig
     ta->defined_in_file = defined_in_file ? xstrdup(defined_in_file) : NULL;
 
     // Unified logic: check for existing symbol to avoid duplicates
+    audit_section_5(ctx, ctx->current_scope, alias, NULL, tok);
     ZenSymbol *sym = symbol_lookup_local(ctx->current_scope, alias);
     if (!sym)
     {
@@ -1128,6 +1115,9 @@ void register_enum_variant(ParserContext *ctx, const char *ename, const char *vn
             return;
         }
     }
+
+    // Record entry in the enum variant registry for global lookup
+    audit_section_5(ctx, ctx->global_scope, vname, NULL, (Token){0});
 
     EnumVariantReg *r = xmalloc(sizeof(EnumVariantReg));
     r->enum_name = xstrdup(ename);
@@ -1402,24 +1392,50 @@ void register_struct_def(ParserContext *ctx, const char *name, ASTNode *node)
 
     d->node = node;
 
-    // Unified logic: check for existing symbol in global scope to avoid duplicates
-    ZenSymbol *sym = symbol_lookup_local(ctx->global_scope, name);
-    if (!sym)
+    // MISRA Rule 5.7: Tag name shall be a unique identifier
+    if (g_config.misra_mode)
+    {
+        ZenSymbol *all = ctx->all_symbols;
+        while (all)
+        {
+            if ((all->kind == SYM_STRUCT || all->kind == SYM_ENUM) && strcmp(all->name, name) == 0)
+            {
+                zerror_at(node ? node->token : (Token){0}, "MISRA Rule 5.7");
+                break;
+            }
+            all = all->next;
+        }
+    }
+
+    ZenSymbol *sym_existing = symbol_lookup_local(ctx->global_scope, name);
+    ZenSymbol *sym = NULL;
+    if (!sym_existing)
     {
         sym = symbol_add(ctx->global_scope, name,
                          (node && node->type == NODE_ENUM) ? SYM_ENUM : SYM_STRUCT);
     }
     else
     {
+        sym = sym_existing;
+        // Ensure kind matches if re-registering
         sym->kind = (node && node->type == NODE_ENUM) ? SYM_ENUM : SYM_STRUCT;
     }
 
     sym->data.node = node;
+    sym->link_name = node ? node->link_name : NULL;
     if (node)
     {
         sym->decl_token = node->token;
+        if (node->type == NODE_STRUCT)
+        {
+            sym->is_export = node->strct.is_export;
+        }
     }
     sym->type_info = node ? node->type_info : NULL;
+
+    // MISRA Section 5 Auditing
+    audit_section_5(ctx, ctx->global_scope, name, sym->link_name, sym->decl_token);
+
     register_symbol_to_lsp(ctx, sym);
 }
 
@@ -3454,7 +3470,7 @@ char *instantiate_function_template(ParserContext *ctx, const char *name, const 
 
     register_func(ctx, ctx->global_scope, mangled, new_fn->func.arg_count, new_fn->func.defaults,
                   new_fn->func.arg_types, new_fn->func.ret_type_info, new_fn->func.is_varargs, 0,
-                  new_fn->func.pure, new_fn->token);
+                  new_fn->func.pure, new_fn->link_name, new_fn->token);
 
     trigger_instantiations(ctx, new_fn->func.body);
 
@@ -3902,10 +3918,10 @@ void instantiate_methods(ParserContext *ctx, GenericImplTemplate *it,
             meth->func.name = new_name;
         }
 
-        // Register the function (either new_name or original mangled name)
         register_func(ctx, ctx->global_scope, meth->func.name, meth->func.arg_count,
                       meth->func.defaults, meth->func.arg_types, meth->func.ret_type_info,
-                      meth->func.is_varargs, 0, meth->func.pure, meth->token);
+                      meth->func.is_varargs, (meth->type == NODE_FUNCTION && meth->func.is_async),
+                      meth->func.pure, meth->link_name, meth->token);
 
         // Handle generic return types in methods (e.g., Option<T> -> Option_int)
         if (meth->func.ret_type &&
@@ -4115,7 +4131,7 @@ void instantiate_generic(ParserContext *ctx, const char *tpl, const char *arg,
                 ret_t->name = xstrdup(m);
 
                 register_func(ctx, ctx->global_scope, mangled_var, 1, NULL, at, ret_t, 0, 0, 0,
-                              token);
+                              NULL, token);
             }
             else
             {
@@ -4124,7 +4140,7 @@ void instantiate_generic(ParserContext *ctx, const char *tpl, const char *arg,
                 Type *ret_t = type_new(TYPE_ENUM);
                 ret_t->name = xstrdup(m);
                 register_func(ctx, ctx->global_scope, mangled_var, 0, NULL, NULL, ret_t, 0, 0, 0,
-                              token);
+                              NULL, token);
             }
 
             free(mangled_var);
@@ -4357,14 +4373,14 @@ void instantiate_generic_multi(ParserContext *ctx, const char *tpl, char **args,
                 ret_t->name = xstrdup(m);
 
                 register_func(ctx, ctx->global_scope, mangled_var, 1, NULL, at, ret_t, 0, 0, 0,
-                              token);
+                              NULL, token);
             }
             else
             {
                 Type *ret_t = type_new(TYPE_ENUM);
                 ret_t->name = xstrdup(m);
                 register_func(ctx, ctx->global_scope, mangled_var, 0, NULL, NULL, ret_t, 0, 0, 0,
-                              token);
+                              NULL, token);
             }
 
             free(mangled_var);
@@ -5642,4 +5658,159 @@ void check_identifier(ParserContext *ctx, Token t)
         snprintf(buf, sizeof(buf), "Cannot use reserved keyword '%s' as an identifier", name);
         zpanic_at(t, "%s", buf);
     }
+}
+
+static void audit_section_5(ParserContext *ctx, Scope *scope, const char *name,
+                            const char *link_name, Token tok)
+{
+    if (!scope || !name)
+    {
+        return;
+    }
+    if (strcmp(name, "it") == 0 || strcmp(name, "self") == 0)
+    {
+        return;
+    }
+
+    Scope *p = scope;
+    int limit = (p == ctx->global_scope) ? 31 : 63;
+
+    while (p)
+    {
+        ZenSymbol *sh = p->symbols;
+        while (sh)
+        {
+            // Rule 5.3: Shadowing
+            if (p != scope && strcmp(sh->name, name) == 0 && !ctx->silent_warnings)
+            {
+                if (g_config.misra_mode)
+                {
+                    zerror_at(tok, "MISRA Rule 5.3");
+                }
+                else
+                {
+                    warn_shadowing(tok, name);
+                }
+            }
+
+            // Rules 5.1/5.2: Distinctness
+            if (g_config.misra_mode)
+            {
+                const char *actual_name = link_name ? link_name : name;
+                const char *sh_actual_name = sh->link_name ? sh->link_name : sh->name;
+
+                // For distinctness, we check if they are different names but collide
+                if (strcmp(sh_actual_name, actual_name) != 0)
+                {
+                    misra_check_identifier_collision(tok, sh_actual_name, actual_name, limit);
+                }
+            }
+
+            sh = sh->next;
+        }
+        p = p->parent;
+    }
+}
+
+static void sync_type_linkage(ParserContext *ctx, Type *t)
+{
+    if (!t)
+    {
+        return;
+    }
+    if ((t->kind == TYPE_STRUCT || t->kind == TYPE_ENUM) && !t->link_name && t->name)
+    {
+        ASTNode *def = find_struct_def(ctx, t->name);
+        if (def && def->link_name)
+        {
+            t->link_name = xstrdup(def->link_name);
+        }
+    }
+    if (t->inner)
+    {
+        sync_type_linkage(ctx, t->inner);
+    }
+    for (int i = 0; i < t->arg_count; i++)
+    {
+        sync_type_linkage(ctx, t->args[i]);
+    }
+}
+
+static void sync_link_names_recursive(ParserContext *ctx, ASTNode *node)
+{
+    if (!node)
+    {
+        return;
+    }
+
+    // Sync type_info if present
+    if (node->type_info)
+    {
+        sync_type_linkage(ctx, node->type_info);
+    }
+
+    // Node-specific sync
+    switch (node->type)
+    {
+    case NODE_FUNCTION:
+        if (node->func.ret_type_info)
+        {
+            sync_type_linkage(ctx, node->func.ret_type_info);
+        }
+        if (node->func.arg_types)
+        {
+            for (int i = 0; i < node->func.arg_count; i++)
+            {
+                sync_type_linkage(ctx, node->func.arg_types[i]);
+            }
+        }
+        sync_link_names_recursive(ctx, node->func.body);
+        break;
+    case NODE_STRUCT:
+        sync_link_names_recursive(ctx, node->strct.fields);
+        break;
+    case NODE_VAR_DECL:
+        sync_link_names_recursive(ctx, node->var_decl.init_expr);
+        break;
+    case NODE_BLOCK:
+        sync_link_names_recursive(ctx, node->block.statements);
+        break;
+    case NODE_IF:
+        sync_link_names_recursive(ctx, node->if_stmt.condition);
+        sync_link_names_recursive(ctx, node->if_stmt.then_body);
+        sync_link_names_recursive(ctx, node->if_stmt.else_body);
+        break;
+    case NODE_RETURN:
+        sync_link_names_recursive(ctx, node->ret.value);
+        break;
+    case NODE_EXPR_CALL:
+        sync_link_names_recursive(ctx, node->call.callee);
+        sync_link_names_recursive(ctx, node->call.args);
+        break;
+    case NODE_EXPR_BINARY:
+        sync_link_names_recursive(ctx, node->binary.left);
+        sync_link_names_recursive(ctx, node->binary.right);
+        break;
+    case NODE_EXPR_UNARY:
+        sync_link_names_recursive(ctx, node->unary.operand);
+        break;
+    case NODE_EXPR_MEMBER:
+        sync_link_names_recursive(ctx, node->member.target);
+        break;
+    case NODE_EXPR_CAST:
+        sync_link_names_recursive(ctx, node->cast.expr);
+        break;
+    case NODE_ROOT:
+        sync_link_names_recursive(ctx, node->root.children);
+        break;
+    default:
+        break;
+    }
+
+    sync_link_names_recursive(ctx, node->next);
+}
+
+void sync_all_link_names(ParserContext *ctx, ASTNode *root)
+{
+    sync_link_names_recursive(ctx, root);
 }

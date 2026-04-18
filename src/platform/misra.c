@@ -665,6 +665,31 @@ void misra_check_struct_decl(TypeChecker *tc, ASTNode *node)
         if (field->type == NODE_FIELD)
         {
             misra_check_pointer_nesting(tc, field->type_info, field->token);
+
+            // Rule 6.1 & 6.2: Bit-fields
+            if (field->field.bit_width > 0)
+            {
+                Type *t = resolve_alias(field->type_info);
+                if (t->kind != TYPE_BOOL && t->kind != TYPE_U8 && t->kind != TYPE_U16 &&
+                    t->kind != TYPE_U32 && t->kind != TYPE_U64 && t->kind != TYPE_I8 &&
+                    t->kind != TYPE_I16 && t->kind != TYPE_I32 && t->kind != TYPE_I64 &&
+                    t->kind != TYPE_UINT && t->kind != TYPE_INT && t->kind != TYPE_BYTE)
+                {
+                    tc_error(tc, field->token, "MISRA Rule 6.1");
+                }
+
+                if (field->field.bit_width == 1 && is_signed_type(t))
+                {
+                    tc_error(tc, field->token, "MISRA Rule 6.2");
+                }
+            }
+
+            // Rule 18.7: Flexible array members
+            if (field->type_info && field->type_info->kind == TYPE_ARRAY &&
+                field->type_info->array_size == 0 && field->next == NULL)
+            {
+                tc_error(tc, field->token, "MISRA Rule 18.7");
+            }
         }
         field = field->next;
     }
@@ -847,5 +872,64 @@ void misra_audit_unused_symbols(TypeChecker *tc)
             }
         }
         sym = sym->next;
+    }
+}
+
+void misra_check_vla(TypeChecker *tc, Type *t, Token token)
+{
+    if (g_config.misra_mode && t && t->kind == TYPE_ARRAY)
+    {
+        // In Zen C, all arrays are technically checked for constant sizes,
+        // but if we are in this check, we enforce that any array declaration
+        // must not be a VLA.
+        tc_error(tc, token, "MISRA Rule 18.8");
+    }
+}
+
+void misra_check_flexible_array(struct ASTNode *strct, struct ASTNode *field)
+{
+    if (!g_config.misra_mode || !strct || !field)
+    {
+        return;
+    }
+
+    // Flexible array members (Rule 18.7)
+    // In Zen C, a zero-sized array or a slice at the end of a struct is a FAM
+    if (field->type_info && field->type_info->kind == TYPE_ARRAY &&
+        field->type_info->array_size == 0)
+    {
+        // Check if it's the last field
+        ASTNode *last = strct->strct.fields;
+        while (last && last->next)
+        {
+            last = last->next;
+        }
+
+        if (last == field)
+        {
+            zerror_at(field->token, "MISRA Rule 18.7");
+        }
+    }
+}
+
+void misra_check_identifier_collision(Token tok, const char *name1, const char *name2, int limit)
+{
+    if (!g_config.misra_mode || !name1 || !name2)
+    {
+        return;
+    }
+
+    if (strncmp(name1, name2, limit) == 0)
+    {
+        char msg[MAX_SHORT_MSG_LEN];
+        if (limit == 31)
+        {
+            snprintf(msg, sizeof(msg), "MISRA Rule 5.1");
+        }
+        else
+        {
+            snprintf(msg, sizeof(msg), "MISRA Rule 5.2");
+        }
+        zerror_at(tok, msg);
     }
 }

@@ -205,13 +205,13 @@ static void codegen_var_expr(ParserContext *ctx, ASTNode *node, FILE *out)
             const char *alias = (ta && !ta->is_opaque) ? ta->original_type : NULL;
             if (alias)
             {
-                emit_mangled_name(out, alias, method_name);
+                emit_mangled_name(ctx, out, alias, method_name);
                 free(type_name);
                 free(mangled_type);
                 return;
             }
         }
-        emit_mangled_name(out, mangled_type, method_name);
+        emit_mangled_name(ctx, out, mangled_type, method_name);
         free(type_name);
         free(mangled_type);
         return;
@@ -245,13 +245,20 @@ static void codegen_var_expr(ParserContext *ctx, ASTNode *node, FILE *out)
                  strncmp(base, "JsonType", 8) == 0);
             if (is_common_enum || (def && def->type == NODE_ENUM))
             {
-                emit_mangled_name(out, base, underscore + 1);
+                emit_mangled_name(ctx, out, base, underscore + 1);
                 return;
             }
         }
     }
-
-    fprintf(out, "%s", node->var_ref.name);
+    ZenSymbol *sym = find_symbol_in_all(ctx, node->var_ref.name);
+    if (sym && sym->link_name)
+    {
+        fprintf(out, "%s", sym->link_name);
+    }
+    else
+    {
+        fprintf(out, "%s", node->var_ref.name);
+    }
 }
 
 // Emit lambda expression
@@ -524,7 +531,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                     call_name = meth;
                 }
 
-                fprintf(out, "%s(", call_name);
+                fprintf(out, "%s(", sig->link_name ? sig->link_name : call_name);
 
                 if (node->binary.left->type == NODE_EXPR_VAR ||
                     node->binary.left->type == NODE_EXPR_INDEX ||
@@ -827,11 +834,14 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                 if (def && def->type == NODE_ENUM)
                 {
                     char mangled[MAX_MANGLED_NAME_LEN];
-                    snprintf(mangled, sizeof(mangled), "%s__%s", mangled_type, method);
+                    const char *ename_for_mangling =
+                        (def->link_name) ? def->link_name : mangled_type;
+                    snprintf(mangled, sizeof(mangled), "%s__%s", ename_for_mangling, method);
                     FuncSig *sig = find_func(ctx, mangled);
                     if (sig)
                     {
-                        fprintf(out, "%s(", mangled);
+                        const char *emit_name = (sig->link_name) ? sig->link_name : mangled;
+                        fprintf(out, "%s(", emit_name);
                         ASTNode *arg = node->call.args;
                         int arg_idx = 0;
                         while (arg)
@@ -994,7 +1004,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                         }
                     }
 
-                    emit_mangled_name(out, mangled_base, method);
+                    emit_mangled_name(ctx, out, mangled_base, method);
                     fprintf(out, "((%s[]){", type_mangled);
                     codegen_expression(ctx, target, out);
                     fprintf(out, "}");
@@ -1125,7 +1135,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                         }
                     }
 
-                    emit_mangled_name(out, call_base, method);
+                    emit_mangled_name(ctx, out, call_base, method);
                     fprintf(out, "(");
                     if (need_cast)
                     {
@@ -1251,7 +1261,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                          strncmp(base, "JsonType", 8) == 0);
                     if (is_common_enum || (def && def->type == NODE_ENUM))
                     {
-                        emit_mangled_name(out, base, underscore + 1);
+                        emit_mangled_name(ctx, out, base, underscore + 1);
                         goto skip_callee_gen;
                     }
                 }

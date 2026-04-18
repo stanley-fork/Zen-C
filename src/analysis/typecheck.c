@@ -129,7 +129,6 @@ void tc_error(TypeChecker *tc, Token t, const char *msg)
         return;
     }
     zerror_at(t, "%s", msg);
-    tc->error_count++;
 }
 
 static int is_expression_invariant(TypeChecker *tc, ASTNode *node, int *val)
@@ -159,13 +158,12 @@ void tc_error_with_hints(TypeChecker *tc, Token t, const char *msg, const char *
         return;
     }
     zerror_with_hints(t, msg, hints);
-    tc->error_count++;
 }
 
 void tc_move_error_with_hints(TypeChecker *tc, Token t, const char *msg, const char *const *hints)
 {
+    (void)tc;
     zerror_with_hints(t, msg, hints);
-    tc->error_count++;
 }
 
 static int is_char_type(Type *t)
@@ -594,6 +592,24 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node, int depth)
                 if (arr->type == NODE_EXPR_VAR)
                 {
                     ZenSymbol *s = tc_lookup(tc, arr->var_ref.name);
+                    if (s)
+                    {
+                        s->is_written_to = 1;
+                    }
+                }
+            }
+            // Also handle member access as write
+            else if (node->binary.left->type == NODE_EXPR_MEMBER)
+            {
+                ASTNode *target = node->binary.left->member.target;
+                // Follow the member chain to the base variable
+                while (target && target->type == NODE_EXPR_MEMBER)
+                {
+                    target = target->member.target;
+                }
+                if (target && target->type == NODE_EXPR_VAR)
+                {
+                    ZenSymbol *s = tc_lookup(tc, target->var_ref.name);
                     if (s)
                     {
                         s->is_written_to = 1;
@@ -1503,6 +1519,17 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node, int depth)
     if (new_sym)
     {
         mark_symbol_valid(tc->pctx, new_sym, node);
+    }
+
+    if (g_config.misra_mode && t && t->kind == TYPE_ARRAY)
+    {
+        // Rule 18.8: No variable length arrays
+        // If it's a stack variable (not static and in a function), it must have a fixed size.
+        // In Zen, type_new_array already requires a constant size, but we verify here for MISRA.
+        if (tc->current_func && !node->var_decl.is_static)
+        {
+            misra_check_vla(tc, t, node->token);
+        }
     }
 }
 
@@ -3211,12 +3238,12 @@ int check_program(ParserContext *ctx, ASTNode *root)
         misra_audit_unused_symbols(&tc);
     }
 
-    if (tc.error_count > 0)
+    if (g_error_count > 0)
     {
         fprintf(stderr,
                 COLOR_BOLD COLOR_RED "     error" COLOR_RESET
                                      ": semantic analysis found %d error%s\n",
-                tc.error_count, tc.error_count == 1 ? "" : "s");
+                g_error_count, g_error_count == 1 ? "" : "s");
         return 1;
     }
 
@@ -3243,5 +3270,5 @@ int check_moves_only(ParserContext *ctx, ASTNode *root)
         ctx->move_state = NULL;
     }
 
-    return tc.error_count;
+    return g_error_count;
 }

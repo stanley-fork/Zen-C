@@ -15,7 +15,8 @@
 #include "../codegen/codegen.h"
 #include "analysis/move_check.h"
 
-ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async, int is_extern)
+ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async, int is_extern,
+                        const char *link_name)
 {
     lexer_next(l);
     Token name_tok = lexer_next(l);
@@ -152,7 +153,7 @@ ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async, int is_exter
     if (!gen_param && !ctx->current_impl_struct)
     {
         register_func(ctx, ctx->current_scope->parent, name, count, defaults, arg_types,
-                      ret_type_obj, is_varargs, is_async, 0, name_tok);
+                      ret_type_obj, is_varargs, is_async, 0, link_name, name_tok);
         // Note: required is set after return by caller (parser_core.c)
     }
 
@@ -226,6 +227,7 @@ ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async, int is_exter
     node->func.is_varargs = is_varargs;
     node->func.is_async = is_async;
     node->func.c_type_overrides = ctype_overrides;
+    node->link_name = link_name ? xstrdup(link_name) : NULL;
 
     if (gen_param)
     {

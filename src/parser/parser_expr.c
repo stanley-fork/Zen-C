@@ -4750,15 +4750,17 @@ char *resolve_struct_name_from_type(ParserContext *ctx, Type *t, int *is_ptr_out
     else
     {
         Type *struct_type = NULL;
-        if (t->kind == TYPE_STRUCT)
+        if (t->kind == TYPE_STRUCT || t->kind == TYPE_ENUM)
         {
             struct_type = t;
-            struct_name = t->name;
+            struct_name = t->link_name ? t->link_name : t->name;
             *is_ptr_out = 0;
         }
-        else if (t->kind == TYPE_POINTER && t->inner->kind == TYPE_STRUCT)
+        else if (t->kind == TYPE_POINTER &&
+                 (t->inner->kind == TYPE_STRUCT || t->inner->kind == TYPE_ENUM))
         {
             struct_type = t->inner;
+            struct_name = t->inner->link_name ? t->inner->link_name : t->inner->name;
             *is_ptr_out = 1;
         }
         if (struct_type)
@@ -5878,7 +5880,7 @@ static ASTNode *parse_expr_prec_impl(ParserContext *ctx, Lexer *l, Precedence mi
                             }
                         }
 
-                        if (is_static_method)
+                        if (is_static_method && (lt && lt->kind != TYPE_ENUM))
                         {
                             zpanic_at(lhs->token,
                                       "Cannot call static method '%s' with dot operator\n"
@@ -5890,50 +5892,54 @@ static ASTNode *parse_expr_prec_impl(ParserContext *ctx, Lexer *l, Precedence mi
                         resolved_name = xstrdup(mangled);
                         resolved_sig = sig;
 
-                        // Create 'self' argument
-                        ASTNode *obj = lhs->member.target;
-
-                        // Handle Reference/Pointer adjustment based on signature
-                        if (sig->total_args > 0 && sig->arg_types[0] &&
-                            sig->arg_types[0]->kind == TYPE_POINTER)
+                        // Create 'self' argument only for instance methods
+                        if (!is_static_method)
                         {
-                            if (!is_lhs_ptr)
-                            {
-                                // Function expects ptr, have value -> &obj
-                                int is_rvalue =
-                                    (obj->type == NODE_EXPR_CALL || obj->type == NODE_EXPR_BINARY ||
-                                     obj->type == NODE_EXPR_STRUCT_INIT ||
-                                     obj->type == NODE_EXPR_CAST || obj->type == NODE_MATCH);
+                            ASTNode *obj = lhs->member.target;
 
-                                ASTNode *addr = ast_create(NODE_EXPR_UNARY);
-                                addr->unary.op = is_rvalue ? xstrdup("&_rval") : xstrdup("&");
-                                addr->unary.operand = obj;
-                                addr->type_info = type_new_ptr(lt);
-                                self_arg = addr;
-                            }
-                            else
+                            // Handle Reference/Pointer adjustment based on signature
+                            if (sig->total_args > 0 && sig->arg_types[0] &&
+                                sig->arg_types[0]->kind == TYPE_POINTER)
                             {
-                                self_arg = obj;
-                            }
-                        }
-                        else
-                        {
-                            // Function expects value
-                            if (is_lhs_ptr)
-                            {
-                                // Have ptr, need value -> *obj
-                                ASTNode *deref = ast_create(NODE_EXPR_UNARY);
-                                deref->unary.op = xstrdup("*");
-                                deref->unary.operand = obj;
-                                if (lt && lt->kind == TYPE_POINTER && lt->inner)
+                                if (!is_lhs_ptr)
                                 {
-                                    deref->type_info = lt->inner;
+                                    // Function expects ptr, have value -> &obj
+                                    int is_rvalue =
+                                        (obj->type == NODE_EXPR_CALL ||
+                                         obj->type == NODE_EXPR_BINARY ||
+                                         obj->type == NODE_EXPR_STRUCT_INIT ||
+                                         obj->type == NODE_EXPR_CAST || obj->type == NODE_MATCH);
+
+                                    ASTNode *addr = ast_create(NODE_EXPR_UNARY);
+                                    addr->unary.op = is_rvalue ? xstrdup("&_rval") : xstrdup("&");
+                                    addr->unary.operand = obj;
+                                    addr->type_info = type_new_ptr(lt);
+                                    self_arg = addr;
                                 }
-                                self_arg = deref;
+                                else
+                                {
+                                    self_arg = obj;
+                                }
                             }
                             else
                             {
-                                self_arg = obj;
+                                // Function expects value
+                                if (is_lhs_ptr)
+                                {
+                                    // Have ptr, need value -> *obj
+                                    ASTNode *deref = ast_create(NODE_EXPR_UNARY);
+                                    deref->unary.op = xstrdup("*");
+                                    deref->unary.operand = obj;
+                                    if (lt && lt->kind == TYPE_POINTER && lt->inner)
+                                    {
+                                        deref->type_info = lt->inner;
+                                    }
+                                    self_arg = deref;
+                                }
+                                else
+                                {
+                                    self_arg = obj;
+                                }
                             }
                         }
                     }

@@ -57,7 +57,7 @@ char *strip_template_suffix(const char *name)
 }
 
 // Helper to emit a mangled name (Type__Method) with standardized underscores.
-void emit_mangled_name(FILE *out, const char *base, const char *method)
+void emit_mangled_name(ParserContext *ctx, FILE *out, const char *base, const char *method)
 {
     if (!base || !method)
     {
@@ -66,7 +66,16 @@ void emit_mangled_name(FILE *out, const char *base, const char *method)
     char buf[MAX_ERROR_MSG_LEN];
     snprintf(buf, sizeof(buf), "%s__%s", base, method);
     char *merged = merge_underscores(buf);
-    fprintf(out, "%s", merged);
+
+    ZenSymbol *sym = ctx ? find_symbol_in_all(ctx, merged) : NULL;
+    if (sym && sym->link_name)
+    {
+        fprintf(out, "%s", sym->link_name);
+    }
+    else
+    {
+        fprintf(out, "%s", merged);
+    }
     free(merged);
 }
 
@@ -838,16 +847,19 @@ void emit_func_signature(ParserContext *ctx, FILE *out, ASTNode *func, const cha
     char *ret_suffix = NULL;
     char *fn_ptr = strstr(ret_str, "(*)");
 
+    char *final_name = (func->link_name)
+                           ? func->link_name
+                           : (name_override ? (char *)name_override : func->func.name);
+
     if (fn_ptr)
     {
         int prefix_len = fn_ptr - ret_str + 2; // Include "(*"
-        fprintf(out, "%.*s%s(", prefix_len, ret_str,
-                name_override ? name_override : func->func.name);
+        fprintf(out, "%.*s%s(", prefix_len, ret_str, final_name);
         ret_suffix = fn_ptr + 2;
     }
     else
     {
-        fprintf(out, "%s %s(", ret_str, name_override ? name_override : func->func.name);
+        fprintf(out, "%s %s(", ret_str, final_name);
     }
     free(ret_str);
 

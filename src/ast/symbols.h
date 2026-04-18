@@ -45,6 +45,7 @@ typedef struct ZenSymbol
     int is_moved;        ///< 1 if ownership transferred.
     int is_written_to;   ///< 1 if the value (or dereferenced memory) was modified.
     char *cfg_condition; ///< Optional @cfg condition.
+    char *link_name;     ///< Overriding C identifier.
 
     union
     {

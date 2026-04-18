@@ -46,9 +46,25 @@ typedef struct DeclarationAttributes
     int cuda_device;
     int cuda_host;
     int is_pure;
+    int is_required;
+    int is_deprecated;
+    char *deprecated_msg;
+    int is_inline;
+    int is_noinline;
+    int is_noreturn;
+    int is_cold;
+    int is_hot;
+    int is_constructor;
+    int is_destructor;
+    int is_unused;
+    int is_weak;
+    int is_export;
+    int is_comptime;
+    char *section;
     Attribute *custom_attributes;
     char **derived_traits;
     int derived_count;
+    char *link_name;
 } DeclarationAttributes;
 
 /**
@@ -82,6 +98,7 @@ typedef struct FuncSig
     int is_async;         ///< 1 if async.
     int required;         ///< 1 if return value must be used.
     int is_pure;          ///< 1 if marked @pure.
+    char *link_name;      ///< Overriding C identifier (from @link_name).
     struct FuncSig *next; ///< Next function in registry.
 } FuncSig;
 
@@ -513,7 +530,7 @@ const char *normalize_type_name(const char *name);
  */
 void register_func(ParserContext *ctx, Scope *scope, const char *name, int count, char **defaults,
                    Type **arg_types, Type *ret_type, int is_varargs, int is_async, int is_pure,
-                   Token decl_token);
+                   const char *link_name, Token decl_token);
 
 /**
  * @brief Registers a function template.
@@ -581,6 +598,11 @@ void add_to_impl_list(ParserContext *ctx, ASTNode *node);
  * @brief Adds a global to the list.
  */
 void add_to_global_list(ParserContext *ctx, ASTNode *node);
+
+/**
+ * @brief Synchronizes linkage overrides across all type references in the AST.
+ */
+void sync_all_link_names(ParserContext *ctx, ASTNode *root);
 
 /**
  * @brief Registers built-in types and functions.
@@ -1050,17 +1072,19 @@ ASTNode *parse_type_alias(ParserContext *ctx, Lexer *l, int is_opaque);
 /**
  * @brief Parses a function definition.
  */
-ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async, int is_extern);
+ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async, int is_extern,
+                        const char *link_name);
 
 /**
- * @brief Parses a struct definition.
+ * @brief Parses a struct or union definition.
  */
-ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque, int is_extern);
+ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque, int is_extern,
+                      const char *link_name);
 
 /**
  * @brief Parses an enum definition.
  */
-ASTNode *parse_enum(ParserContext *ctx, Lexer *l);
+ASTNode *parse_enum(ParserContext *ctx, Lexer *l, const char *link_name);
 
 /**
  * @brief Parses a trait definition.

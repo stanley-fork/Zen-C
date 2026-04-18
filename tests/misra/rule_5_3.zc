@@ -1,8 +1,9 @@
-// MISRA Rule 5.3: Identifier shadowing
+// Rule 5.3: An identifier declared in an inner scope shall not hide an identifier in an outer scope
 // EXPECT: MISRA Rule 5.3
+
+let _GlobalVar = 1;
+
 fn main() {
-    let x: i32 = 10;
-    {
-        let x: i32 = 20; // Shadows outer x
-    }
+    // Should violate Rule 5.3 (Shadowing)
+    let _GlobalVar = 2;
 }

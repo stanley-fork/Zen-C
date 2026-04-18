@@ -85,6 +85,7 @@ typedef struct Type
 {
     TypeKind kind;          ///< The kind of type.
     char *name;             ///< Name of the type (for STRUCT, GENERIC, ENUM).
+    char *link_name;        ///< Optional linkage override (from @link_name).
     struct Type *inner;     ///< Inner type (for POINTER, ARRAY).
     struct Type **args;     ///< Generic arguments (for GENERIC instantiations).
     int arg_count;          ///< Count of generic arguments.
@@ -204,6 +205,7 @@ struct ASTNode
     Token definition_token; // For LSP: Location where the symbol used in this
                             // node was defined.
     char *cfg_condition;    // C preprocessor condition from @cfg
+    char *link_name;        // Optional override for external C name
 
     union
     {

@@ -681,7 +681,15 @@ Type *parse_type_formal(ParserContext *ctx, Lexer *l)
         }
         else
         {
-            zpanic_at(size_expr->token, "Array size must be a known compile-time constant integer");
+            if (g_config.misra_mode)
+            {
+                zpanic_at(size_expr->token, "MISRA Rule 18.8");
+            }
+            else
+            {
+                zpanic_at(size_expr->token,
+                          "Array size must be a known compile-time constant integer");
+            }
         }
 
         if (lexer_next(l).type != TOK_RBRACKET)

@@ -395,6 +395,7 @@ void emit_enum_protos(ParserContext *ctx, ASTNode *node, FILE *out)
     {
         if (node->type == NODE_ENUM && !node->enm.is_template)
         {
+            const char *final_name = node->link_name ? node->link_name : node->enm.name;
             if (node->cfg_condition)
             {
                 fprintf(out, "#if %s\n", node->cfg_condition);
@@ -413,7 +414,7 @@ void emit_enum_protos(ParserContext *ctx, ASTNode *node, FILE *out)
 
                     if (tuple_def)
                     {
-                        fprintf(out, "%s %s__%s(", node->enm.name, node->enm.name, v->variant.name);
+                        fprintf(out, "%s %s__%s(", final_name, final_name, v->variant.name);
                         ASTNode *f = tuple_def->strct.fields;
                         int i = 0;
                         while (f)
@@ -428,14 +429,14 @@ void emit_enum_protos(ParserContext *ctx, ASTNode *node, FILE *out)
                     else
                     {
                         char *tstr = type_to_c_string(v->variant.payload);
-                        fprintf(out, "%s %s__%s(%s v);\n", node->enm.name, node->enm.name,
-                                v->variant.name, tstr);
+                        fprintf(out, "%s %s__%s(%s v);\n", final_name, final_name, v->variant.name,
+                                tstr);
                         free(tstr);
                     }
                 }
                 else
                 {
-                    fprintf(out, "%s %s__%s();\n", node->enm.name, node->enm.name, v->variant.name);
+                    fprintf(out, "%s %s__%s();\n", final_name, final_name, v->variant.name);
                 }
                 v = v->next;
             }
@@ -768,7 +769,7 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
 
             if (node->strct.name)
             {
-                fprintf(out, " %s", node->strct.name);
+                fprintf(out, " %s", node->link_name ? node->link_name : node->strct.name);
             }
 
             fprintf(out, " {");
@@ -792,6 +793,7 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
         }
         else if (node->type == NODE_ENUM)
         {
+            const char *final_name = node->link_name ? node->link_name : node->enm.name;
             if (node->cfg_condition)
             {
                 fprintf(out, "#if %s\n", node->cfg_condition);
@@ -800,11 +802,11 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
             v = node->enm.variants;
             while (v)
             {
-                fprintf(out, "%s__%s_Tag, ", node->enm.name, v->variant.name);
+                fprintf(out, "%s__%s_Tag, ", final_name, v->variant.name);
                 v = v->next;
             }
-            fprintf(out, "} %s_Tag;\n", node->enm.name);
-            fprintf(out, "struct %s { %s_Tag tag; union { ", node->enm.name, node->enm.name);
+            fprintf(out, "} %s_Tag;\n", final_name);
+            fprintf(out, "struct %s { %s_Tag tag; union { ", final_name, final_name);
             v = node->enm.variants;
             while (v)
             {
@@ -833,7 +835,7 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                     if (tuple_def)
                     {
                         // Generate multi-argument constructor for tuple variants
-                        fprintf(out, "%s %s__%s(", node->enm.name, node->enm.name, v->variant.name);
+                        fprintf(out, "%s %s__%s(", final_name, final_name, v->variant.name);
                         ASTNode *f = tuple_def->strct.fields;
                         int i = 0;
                         while (f)
@@ -847,8 +849,8 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                         fprintf(out, ") {\n");
                         if (g_config.use_cpp)
                         {
-                            fprintf(out, "    %s _res = {}; _res.tag = %s__%s_Tag; ",
-                                    node->enm.name, node->enm.name, v->variant.name);
+                            fprintf(out, "    %s _res = {}; _res.tag = %s__%s_Tag; ", final_name,
+                                    final_name, v->variant.name);
                             for (int j = 0; j < i; j++)
                             {
                                 fprintf(out, "_res.data.%s.v%d = _%d; ", v->variant.name, j, j);
@@ -857,9 +859,8 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                         }
                         else
                         {
-                            fprintf(out, "    return (%s){.tag=%s__%s_Tag, .data.%s={",
-                                    node->enm.name, node->enm.name, v->variant.name,
-                                    v->variant.name);
+                            fprintf(out, "    return (%s){.tag=%s__%s_Tag, .data.%s={", final_name,
+                                    final_name, v->variant.name, v->variant.name);
                             for (int j = 0; j < i; j++)
                             {
                                 fprintf(out, ".v%d=_%d%s", j, j, (j == i - 1) ? "" : ", ");
@@ -875,18 +876,16 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                             fprintf(out,
                                     "%s %s__%s(%s v) { %s _res = {}; _res.tag=%s__%s_Tag; "
                                     "_res.data.%s=v; return _res; }\n",
-                                    node->enm.name, node->enm.name, v->variant.name, tstr,
-                                    node->enm.name, node->enm.name, v->variant.name,
-                                    v->variant.name);
+                                    final_name, final_name, v->variant.name, tstr, final_name,
+                                    final_name, v->variant.name, v->variant.name);
                         }
                         else
                         {
                             fprintf(out,
                                     "%s %s__%s(%s v) { return (%s){.tag=%s__%s_Tag, "
                                     ".data.%s=v}; }\n",
-                                    node->enm.name, node->enm.name, v->variant.name, tstr,
-                                    node->enm.name, node->enm.name, v->variant.name,
-                                    v->variant.name);
+                                    final_name, final_name, v->variant.name, tstr, final_name,
+                                    final_name, v->variant.name, v->variant.name);
                         }
                     }
                     free(tstr);
@@ -897,14 +896,14 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                     {
                         fprintf(out,
                                 "%s %s__%s() { %s _res = {}; _res.tag=%s__%s_Tag; return _res; }\n",
-                                node->enm.name, node->enm.name, v->variant.name, node->enm.name,
-                                node->enm.name, v->variant.name);
+                                final_name, final_name, v->variant.name, final_name, final_name,
+                                v->variant.name);
                     }
                     else
                     {
-                        fprintf(out, "%s %s__%s() { return (%s){.tag=%s__%s_Tag}; }\n",
-                                node->enm.name, node->enm.name, v->variant.name, node->enm.name,
-                                node->enm.name, v->variant.name);
+                        fprintf(out, "%s %s__%s() { return (%s){.tag=%s__%s_Tag}; }\n", final_name,
+                                final_name, v->variant.name, final_name, final_name,
+                                v->variant.name);
                     }
                 }
                 v = v->next;
@@ -1197,16 +1196,16 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
             }
             if (f->func.is_async)
             {
-                fprintf(out, "Async %s(%s);\n", f->func.name, f->func.args);
+                const char *final_name = (f->link_name) ? f->link_name : f->func.name;
+                fprintf(out, "Async %s(%s);\n", final_name, f->func.args);
                 // Also emit _impl_ prototype
                 if (f->func.ret_type)
                 {
-                    fprintf(out, "%s _impl_%s(%s);\n", f->func.ret_type, f->func.name,
-                            f->func.args);
+                    fprintf(out, "%s _impl_%s(%s);\n", f->func.ret_type, final_name, f->func.args);
                 }
                 else
                 {
-                    fprintf(out, "void _impl_%s(%s);\n", f->func.name, f->func.args);
+                    fprintf(out, "void _impl_%s(%s);\n", final_name, f->func.args);
                 }
             }
             else
@@ -1314,7 +1313,8 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
 
                 if (m->func.is_async)
                 {
-                    fprintf(out, "Async %s(%s);\n", proto, m->func.args);
+                    const char *final_name = (m->link_name) ? m->link_name : proto;
+                    fprintf(out, "Async %s(%s);\n", final_name, m->func.args);
                 }
                 else
                 {
@@ -1676,13 +1676,15 @@ void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes)
             }
             else if (local->strct.name)
             {
+                const char *final_name = local->link_name ? local->link_name : local->strct.name;
                 const char *keyword = local->strct.is_union ? "union" : "struct";
-                fprintf(out, "typedef %s %s %s;\n", keyword, local->strct.name, local->strct.name);
+                fprintf(out, "typedef %s %s %s;\n", keyword, final_name, final_name);
             }
         }
         if (local->type == NODE_ENUM && !local->enm.is_template && local->enm.name)
         {
-            fprintf(out, "typedef struct %s %s;\n", local->enm.name, local->enm.name);
+            const char *final_name = local->link_name ? local->link_name : local->enm.name;
+            fprintf(out, "typedef struct %s %s;\n", final_name, final_name);
         }
         local = local->next;
     }

@@ -223,8 +223,9 @@ int main(int argc, char **argv)
         {
             g_config.zen_mode = 1;
         }
-        else if (strcmp(arg, "--check") == 0)
+        else if (strcmp(arg, "--check") == 0 || strcmp(arg, "-c") == 0)
         {
+            g_config.mode_check = 1;
             g_config.use_typecheck = 1;
         }
         else if (strcmp(arg, "--misra") == 0)
@@ -276,10 +277,6 @@ int main(int argc, char **argv)
         else if (strcmp(arg, "--objc") == 0 || strcmp(arg, "--objective-c") == 0)
         {
             g_config.use_objc = 1;
-        }
-        else if (strcmp(arg, "--check") == 0)
-        {
-            g_config.mode_check = 1;
         }
         else if (strcmp(arg, "--cc") == 0)
         {
@@ -716,11 +713,13 @@ int main(int argc, char **argv)
     // In check mode, exit after type checking
     if (g_config.mode_check)
     {
-        if (tc_result != 0)
+        if (tc_result != 0 || g_error_count > 0)
         {
             fprintf(stderr,
-                    COLOR_BOLD COLOR_RED "       Check" COLOR_RESET " failed with %d warning%s\n",
-                    g_warning_count, g_warning_count == 1 ? "" : "s");
+                    COLOR_BOLD COLOR_RED "       Check" COLOR_RESET
+                                         " failed with %d error%s and %d warning%s\n",
+                    g_error_count, g_error_count == 1 ? "" : "s", g_warning_count,
+                    g_warning_count == 1 ? "" : "s");
             return 1;
         }
         if (g_config.verbose)
@@ -999,11 +998,12 @@ int main(int argc, char **argv)
 
     if (!g_config.quiet)
     {
-        if (g_warning_count > 0)
+        if (g_error_count > 0 || g_warning_count > 0)
         {
             printf(COLOR_BOLD COLOR_GREEN "    Finished" COLOR_RESET
-                                          " build in %.2fs with %d warning%s\n",
-                   time_taken, g_warning_count, g_warning_count == 1 ? "" : "s");
+                                          " build in %.2fs with %d error%s and %d warning%s\n",
+                   time_taken, g_error_count, g_error_count == 1 ? "" : "s", g_warning_count,
+                   g_warning_count == 1 ? "" : "s");
         }
         else
         {

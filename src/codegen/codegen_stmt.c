@@ -599,7 +599,8 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
 
         if (node->func.is_async)
         {
-            fprintf(out, "struct %s_Args {\n", node->func.name);
+            const char *final_name = (node->link_name) ? node->link_name : node->func.name;
+            fprintf(out, "struct %s_Args {\n", final_name);
             char *args_copy = xstrdup(node->func.args);
             char *token = strtok(args_copy, ",");
             int arg_count = 0;
@@ -626,10 +627,10 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
             free(args_copy);
             fprintf(out, "};\n");
 
-            fprintf(out, "void* _runner_%s(void* _args)\n", node->func.name);
+            fprintf(out, "void* _runner_%s(void* _args)\n", final_name);
             fprintf(out, "{\n");
-            fprintf(out, "    struct %s_Args* args = (struct %s_Args*)_args;\n", node->func.name,
-                    node->func.name);
+            fprintf(out, "    struct %s_Args* args = (struct %s_Args*)_args;\n", final_name,
+                    final_name);
 
             // Determine mechanism: struct/large-type? -> malloc; primitive -> cast
             int returns_struct = 0;
@@ -662,7 +663,7 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
                 fprintf(out, "    ");
             }
 
-            fprintf(out, "_impl_%s(", node->func.name);
+            fprintf(out, "_impl_%s(", final_name);
             for (int i = 0; i < arg_count; i++)
             {
                 fprintf(out, "%sargs->%s", i > 0 ? ", " : "", arg_names[i]);
@@ -684,8 +685,7 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
             }
             fprintf(out, "}\n");
 
-            fprintf(out, "%s _impl_%s(%s)\n", node->func.ret_type, node->func.name,
-                    node->func.args);
+            fprintf(out, "%s _impl_%s(%s)\n", node->func.ret_type, final_name, node->func.args);
             fprintf(out, "{\n");
             defer_count = 0;
             codegen_walker(ctx, node->func.body, out);
@@ -697,17 +697,17 @@ void codegen_node_single(ParserContext *ctx, ASTNode *node, FILE *out)
             fprintf(out, "}\n");
 
             // 4. Define Public Wrapper (Spawns Thread)
-            fprintf(out, "Async %s(%s)\n", node->func.name, node->func.args);
+            fprintf(out, "Async %s(%s)\n", final_name, node->func.args);
             fprintf(out, "{\n");
-            fprintf(out, "    struct %s_Args* args = malloc(sizeof(struct %s_Args));\n",
-                    node->func.name, node->func.name);
+            fprintf(out, "    struct %s_Args* args = malloc(sizeof(struct %s_Args));\n", final_name,
+                    final_name);
             for (int i = 0; i < arg_count; i++)
             {
                 fprintf(out, "    args->%s = %s;\n", arg_names[i], arg_names[i]);
             }
 
             fprintf(out, "    pthread_t th;\n");
-            fprintf(out, "    pthread_create(&th, NULL, _runner_%s, args);\n", node->func.name);
+            fprintf(out, "    pthread_create(&th, NULL, _runner_%s, args);\n", final_name);
             fprintf(out, "    return (Async){.thread=th, .result=NULL};\n");
             fprintf(out, "}\n");
 

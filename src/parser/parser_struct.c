@@ -138,6 +138,12 @@ ASTNode *parse_trait(ParserContext *ctx, Lexer *l)
             break;
         }
 
+        DeclarationAttributes attrs = {0};
+        if (lexer_peek(l).type == TOK_AT)
+        {
+            attrs = parse_attributes(ctx, l);
+        }
+
         // Parse method signature: fn name(args...) -> ret;
         Token ft = lexer_next(l);
         if (ft.type != TOK_IDENT || strncmp(ft.start, "fn", 2) != 0)
@@ -185,6 +191,9 @@ ASTNode *parse_trait(ParserContext *ctx, Lexer *l)
             m->func.ret_type = ret;
             m->func.ret_type_info = ret_type_obj;
             m->func.body = NULL;
+            m->link_name = attrs.link_name;
+            m->cfg_condition = attrs.cfg_condition;
+            m->func.pure = attrs.is_pure;
             if (!methods)
             {
                 methods = m;
@@ -390,7 +399,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
 
             if (lexer_peek(l).type == TOK_IDENT && strncmp(lexer_peek(l).start, "fn", 2) == 0)
             {
-                ASTNode *f = parse_function(ctx, l, 0, 0);
+                ASTNode *f = parse_function(ctx, l, 0, 0, attrs.link_name);
                 // Mangle: Type_Trait_Method
                 {
                     char tmp[MAX_MANGLED_NAME_LEN];
@@ -409,6 +418,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     f->cfg_condition = attrs.cfg_condition;
                 }
                 f->func.pure = attrs.is_pure;
+                f->link_name = attrs.link_name;
 
                 // Register function for lookup
                 if (f->func.generic_params)
@@ -419,7 +429,8 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                 {
                     register_func(ctx, ctx->current_scope, f->func.name, f->func.arg_count,
                                   f->func.defaults, f->func.arg_types, f->func.ret_type_info,
-                                  f->func.is_varargs, f->func.is_async, f->func.pure, f->token);
+                                  f->func.is_varargs, f->func.is_async, f->func.pure, f->link_name,
+                                  f->token);
                 }
 
                 if (!h)
@@ -437,7 +448,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                 lexer_next(l); // eat async
                 if (lexer_peek(l).type == TOK_IDENT && strncmp(lexer_peek(l).start, "fn", 2) == 0)
                 {
-                    ASTNode *f = parse_function(ctx, l, 1, 0);
+                    ASTNode *f = parse_function(ctx, l, 1, 0, attrs.link_name);
                     f->func.is_async = 1;
                     // Mangle: Type_Trait_Method
                     {
@@ -448,8 +459,10 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     }
 
                     char *na = patch_self_args(f->func.args, full_target_name);
-                    free(f->func.args);
                     f->func.args = na;
+                    f->link_name = attrs.link_name;
+                    f->cfg_condition = attrs.cfg_condition;
+                    f->func.pure = attrs.is_pure;
 
                     // Register function for lookup
                     if (f->func.generic_params)
@@ -460,7 +473,8 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     {
                         register_func(ctx, ctx->current_scope, f->func.name, f->func.arg_count,
                                       f->func.defaults, f->func.arg_types, f->func.ret_type_info,
-                                      f->func.is_varargs, f->func.is_async, f->func.pure, f->token);
+                                      f->func.is_varargs, f->func.is_async, f->func.pure,
+                                      f->link_name, f->token);
                     }
 
                     if (!h)
@@ -581,9 +595,15 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     lexer_next(l);
                     break;
                 }
+                DeclarationAttributes attrs = {0};
+                if (lexer_peek(l).type == TOK_AT)
+                {
+                    attrs = parse_attributes(ctx, l);
+                }
+
                 if (lexer_peek(l).type == TOK_IDENT && strncmp(lexer_peek(l).start, "fn", 2) == 0)
                 {
-                    ASTNode *f = parse_function(ctx, l, 0, 0);
+                    ASTNode *f = parse_function(ctx, l, 0, 0, attrs.link_name);
                     // Standard Mangle for template: Box_method
                     {
                         char *tmp = xmalloc(strlen(name1) + strlen(f->func.name) + 3);
@@ -632,7 +652,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     if (lexer_peek(l).type == TOK_IDENT &&
                         strncmp(lexer_peek(l).start, "fn", 2) == 0)
                     {
-                        ASTNode *f = parse_function(ctx, l, 1, 0);
+                        ASTNode *f = parse_function(ctx, l, 1, 0, attrs.link_name);
                         f->func.is_async = 1;
                         {
                             char *tmp = xmalloc(strlen(name1) + strlen(f->func.name) + 3);
@@ -711,61 +731,16 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     lexer_next(l);
                     break;
                 }
+
+                DeclarationAttributes attrs = {0};
                 if (lexer_peek(l).type == TOK_AT)
                 {
-                    DeclarationAttributes attrs = parse_attributes(ctx, l);
-                    if (lexer_peek(l).type == TOK_IDENT &&
-                        strncmp(lexer_peek(l).start, "fn", 2) == 0)
-                    {
-                        ASTNode *f = parse_function(ctx, l, 0, 0);
-
-                        // Standard Mangle: Struct_method
-                        {
-                            size_t tmp_len = strlen(name1) + strlen(f->func.name) + 3;
-                            char *tmp = xmalloc(tmp_len);
-                            snprintf(tmp, tmp_len, "%s__%s", name1, f->func.name);
-                            free(f->func.name);
-                            f->func.name = merge_underscores(tmp);
-                            free(tmp);
-                        }
-
-                        char *na = patch_self_args(f->func.args, name1);
-                        free(f->func.args);
-                        f->func.args = na;
-
-                        if (attrs.cfg_condition)
-                        {
-                            f->cfg_condition = attrs.cfg_condition;
-                        }
-                        f->func.pure = attrs.is_pure;
-
-                        if (f->func.generic_params)
-                        {
-                            register_func_template(ctx, f->func.name, f->func.generic_params, f);
-                        }
-                        else
-                        {
-                            register_func(ctx, ctx->current_scope, f->func.name, f->func.arg_count,
-                                          f->func.defaults, f->func.arg_types,
-                                          f->func.ret_type_info, f->func.is_varargs, 0,
-                                          f->func.pure, f->token);
-                        }
-
-                        if (!h)
-                        {
-                            h = f;
-                        }
-                        else
-                        {
-                            tl->next = f;
-                        }
-                        tl = f;
-                    }
+                    attrs = parse_attributes(ctx, l);
                 }
-                else if (lexer_peek(l).type == TOK_IDENT &&
-                         strncmp(lexer_peek(l).start, "fn", 2) == 0)
+
+                if (lexer_peek(l).type == TOK_IDENT && strncmp(lexer_peek(l).start, "fn", 2) == 0)
                 {
-                    ASTNode *f = parse_function(ctx, l, 0, 0);
+                    ASTNode *f = parse_function(ctx, l, 0, 0, attrs.link_name);
 
                     // Standard Mangle: Struct_method
                     {
@@ -781,6 +756,13 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     free(f->func.args);
                     f->func.args = na;
 
+                    if (attrs.cfg_condition)
+                    {
+                        f->cfg_condition = attrs.cfg_condition;
+                    }
+                    f->func.pure = attrs.is_pure;
+                    f->link_name = attrs.link_name;
+
                     if (f->func.generic_params)
                     {
                         register_func_template(ctx, f->func.name, f->func.generic_params, f);
@@ -789,7 +771,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     {
                         register_func(ctx, ctx->current_scope, f->func.name, f->func.arg_count,
                                       f->func.defaults, f->func.arg_types, f->func.ret_type_info,
-                                      f->func.is_varargs, 0, f->func.pure, f->token);
+                                      f->func.is_varargs, 0, f->func.pure, f->link_name, f->token);
                     }
 
                     if (!h)
@@ -808,7 +790,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     if (lexer_peek(l).type == TOK_IDENT &&
                         strncmp(lexer_peek(l).start, "fn", 2) == 0)
                     {
-                        ASTNode *f = parse_function(ctx, l, 1, 0);
+                        ASTNode *f = parse_function(ctx, l, 1, 0, attrs.link_name);
                         f->func.is_async = 1;
                         {
                             size_t tmp_len = strlen(name1) + strlen(f->func.name) + 3;
@@ -821,6 +803,14 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                         char *na = patch_self_args(f->func.args, name1);
                         free(f->func.args);
                         f->func.args = na;
+
+                        if (attrs.cfg_condition)
+                        {
+                            f->cfg_condition = attrs.cfg_condition;
+                        }
+                        f->func.pure = attrs.is_pure;
+                        f->link_name = attrs.link_name;
+
                         if (f->func.generic_params)
                         {
                             register_func_template(ctx, f->func.name, f->func.generic_params, f);
@@ -830,7 +820,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                             register_func(ctx, ctx->current_scope, f->func.name, f->func.arg_count,
                                           f->func.defaults, f->func.arg_types,
                                           f->func.ret_type_info, f->func.is_varargs, 1,
-                                          f->func.pure, f->token);
+                                          f->func.pure, f->link_name, f->token);
                         }
                         if (!h)
                         {
@@ -841,10 +831,6 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                             tl->next = f;
                         }
                         tl = f;
-                    }
-                    else
-                    {
-                        zpanic_at(lexer_peek(l), "Expected 'fn' after 'async'");
                     }
                 }
                 else
@@ -867,7 +853,8 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
     }
 }
 
-ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque, int is_extern)
+ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque, int is_extern,
+                      const char *link_name)
 {
 
     lexer_next(l); // eat struct or union
@@ -917,6 +904,7 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque,
         lexer_next(l);
         ASTNode *node = ast_create(NODE_STRUCT);
         node->strct.name = name;
+        node->link_name = link_name ? xstrdup(link_name) : NULL;
         node->strct.is_template = (gp_count > 0);
         node->strct.generic_params = gps;
         node->strct.generic_param_count = gp_count;
@@ -1121,12 +1109,13 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque,
         ASTNode *existing = find_concrete_struct_def(ctx, name);
         if (existing)
         {
-            zpanic_at(name_token, "Redefinition of %s '%s'", is_union ? "union" : "struct", name);
+            zerror_at(name_token, "Redefinition of %s '%s'", is_union ? "union" : "struct", name);
         }
     }
 
     ASTNode *node = ast_create(NODE_STRUCT);
     node->token = name_token;
+    node->link_name = link_name ? xstrdup(link_name) : NULL;
     add_to_struct_list(ctx, node);
 
     node->strct.name = name;
@@ -1134,6 +1123,10 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque,
     // Initialize Type Info so we can track traits (like Drop)
     node->type_info = type_new(TYPE_STRUCT);
     node->type_info->name = xstrdup(name);
+    if (node->link_name)
+    {
+        node->type_info->link_name = xstrdup(node->link_name);
+    }
     if (gp_count > 0)
     {
         node->type_info->kind = TYPE_GENERIC;
@@ -1189,7 +1182,7 @@ Type *parse_type_obj(ParserContext *ctx, Lexer *l)
     return t;
 }
 
-ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
+ASTNode *parse_enum(ParserContext *ctx, Lexer *l, const char *link_name)
 {
     lexer_next(l);
     Token n = lexer_next(l);
@@ -1234,6 +1227,8 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
             char *vname = token_strdup(vt);
 
             Type *payload = NULL;
+            Type **tuple_types = NULL;
+            int tuple_count = 0;
             if (lexer_peek(l).type == TOK_LPAREN)
             {
                 lexer_next(l); // eat (
@@ -1253,11 +1248,15 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
                     strcpy(sig, s);
                     free(s);
 
+                    tuple_types = xmalloc(sizeof(Type *) * 32);
+                    tuple_types[tuple_count++] = first_t;
+
                     while (lexer_peek(l).type == TOK_COMMA)
                     {
                         lexer_next(l); // eat ,
                         strcat(sig, "__");
                         Type *next_t = parse_type_obj(ctx, l);
+                        tuple_types[tuple_count++] = next_t;
                         char *ns = type_to_string(next_t);
                         if (strlen(sig) + strlen(ns) + 2 > 510)
                         {
@@ -1294,8 +1293,11 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
 
             // Register Variant (Mangled name to avoid collisions: Result_Ok)
             size_t mangled_sz = strlen(ename) + strlen(vname) + 3;
+            char *base_for_mangling = link_name ? (char *)link_name : ename;
+            mangled_sz = strlen(base_for_mangling) + strlen(vname) + 3;
+
             char *mangled_tmp = xmalloc(mangled_sz);
-            snprintf(mangled_tmp, mangled_sz, "%s__%s", ename, vname);
+            snprintf(mangled_tmp, mangled_sz, "%s__%s", base_for_mangling, vname);
             char *mangled = merge_underscores(mangled_tmp);
             free(mangled_tmp);
             register_enum_variant(ctx, ename, mangled, va->variant.tag_id);
@@ -1305,29 +1307,16 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
             {
                 if (payload->kind == TYPE_STRUCT && strncmp(payload->name, "Tuple__", 7) == 0)
                 {
-                    // Unflatten tuple for the constructor signature
-                    ASTNode *tdef = find_struct_def(ctx, payload->name);
-                    if (tdef)
+                    Type *ret_t = type_new(TYPE_ENUM);
+                    ret_t->name = xstrdup(ename);
+                    if (link_name)
                     {
-                        int ac = 0;
-                        ASTNode *f = tdef->strct.fields;
-                        while (f)
-                        {
-                            ac++;
-                            f = f->next;
-                        }
-                        Type **at = xmalloc(sizeof(Type *) * ac);
-                        f = tdef->strct.fields;
-                        for (int i = 0; i < ac; i++)
-                        {
-                            at[i] = f->type_info;
-                            f = f->next;
-                        }
-                        Type *ret_t = type_new(TYPE_ENUM);
-                        ret_t->name = xstrdup(ename);
-                        register_func(ctx, ctx->current_scope, mangled, ac, NULL, at, ret_t, 0, 0,
-                                      0, vt);
+                        ret_t->link_name = xstrdup(link_name);
                     }
+
+                    // We can reuse the tuple_types collected during parsing!
+                    register_func(ctx, ctx->current_scope, mangled, tuple_count, NULL, tuple_types,
+                                  ret_t, 0, 0, 0, mangled, vt);
                 }
                 else
                 {
@@ -1335,8 +1324,12 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
                     at[0] = payload;
                     Type *ret_t = type_new(TYPE_ENUM);
                     ret_t->name = xstrdup(ename);
+                    if (link_name)
+                    {
+                        ret_t->link_name = xstrdup(link_name);
+                    }
                     register_func(ctx, ctx->current_scope, mangled, 1, NULL, at, ret_t, 0, 0, 0,
-                                  vt);
+                                  mangled, vt);
                 }
             }
             else if (!gp)
@@ -1344,7 +1337,12 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
                 // No payload: fn Name() -> Enum
                 Type *ret_t = type_new(TYPE_ENUM);
                 ret_t->name = xstrdup(ename);
-                register_func(ctx, ctx->current_scope, mangled, 0, NULL, NULL, ret_t, 0, 0, 0, vt);
+                if (link_name)
+                {
+                    ret_t->link_name = xstrdup(link_name);
+                }
+                register_func(ctx, ctx->current_scope, mangled, 0, NULL, NULL, ret_t, 0, 0, 0,
+                              mangled, vt);
             }
             free(mangled);
 
@@ -1385,6 +1383,13 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
     ASTNode *node = ast_create(NODE_ENUM);
     node->token = n;
     node->enm.name = ename;
+    node->link_name = link_name ? xstrdup(link_name) : NULL;
+    node->type_info = type_new(TYPE_ENUM);
+    node->type_info->name = xstrdup(ename);
+    if (node->link_name)
+    {
+        node->type_info->link_name = xstrdup(node->link_name);
+    }
 
     node->enm.variants = h;
     node->enm.generic_param = gp; // Store generic param
@@ -1395,6 +1400,8 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
         ctx->known_generics_count--;
         register_template(ctx, node->enm.name, node);
     }
+
+    register_struct_def(ctx, node->enm.name, node);
 
     add_to_enum_list(ctx, node); // Register globally
 

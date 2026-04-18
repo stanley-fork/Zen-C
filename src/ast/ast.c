@@ -109,6 +109,7 @@ Type *type_new(TypeKind kind)
         t->traits.has_drop = 1;
     }
     t->name = NULL;
+    t->link_name = NULL;
     t->inner = NULL;
     t->args = NULL;
     t->arg_count = 0;
@@ -688,7 +689,7 @@ static char *type_to_string_impl(Type *t)
     case TYPE_ALIAS:
         return xstrdup(t->name);
     case TYPE_ENUM:
-        return xstrdup(t->name);
+        return xstrdup(t->link_name ? t->link_name : t->name);
 
     default:
         return xstrdup("unknown");
@@ -730,17 +731,22 @@ static char *type_to_c_string_impl(Type *t)
         return xstrdup("void");
     case TYPE_STRUCT:
     {
-        // Only prepend 'struct' if explicitly requested (e.g. "struct Foo")
+        if (t->link_name)
+        {
+            return xstrdup(
+                t->link_name); // Only prepend 'struct' if explicitly requested (e.g. "struct Foo")
+        }
         // otherwise assume it's a typedef/alias (e.g. "Foo").
         if (t->is_explicit_struct)
         {
-            char *res = xmalloc(strlen(t->name) + 8);
-            sprintf(res, "struct %s", t->name);
+            const char *final_name = t->link_name ? t->link_name : t->name;
+            char *res = xmalloc(strlen(final_name) + 8);
+            sprintf(res, "struct %s", final_name);
             return res;
         }
         else
         {
-            return xstrdup(t->name);
+            return xstrdup(t->link_name ? t->link_name : t->name);
         }
     }
     case TYPE_BOOL:
@@ -989,7 +995,7 @@ static char *type_to_c_string_impl(Type *t)
         return type_to_c_string(t->inner);
 
     case TYPE_ENUM:
-        return xstrdup(t->name);
+        return xstrdup(t->link_name ? t->link_name : t->name);
 
     default:
         return xstrdup("unknown");

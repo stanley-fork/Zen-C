@@ -69,6 +69,9 @@ void misra_check_goto_constraint(TypeChecker *tc, Token goto_tok, Token label_to
 void misra_check_union(TypeChecker *tc, Token token);
 void misra_check_iteration_termination(TypeChecker *tc, Token token);
 void misra_check_stdarg(TypeChecker *tc, Token token);
+void misra_check_vla(TypeChecker *tc, Type *t, Token token);
+void misra_check_flexible_array(struct ASTNode *strct, struct ASTNode *field);
+void misra_check_identifier_collision(Token tok, const char *name1, const char *name2, int limit);
 
 // Section 2: Unused Code
 void misra_audit_unused_symbols(struct TypeChecker *tc);
