@@ -49,6 +49,9 @@ void misra_check_initializer_side_effects(struct TypeChecker *tc, struct ASTNode
 
 // Section 16: Match/Switch
 void misra_check_match_stmt(struct TypeChecker *tc, struct ASTNode *node);
+void misra_check_strict_match(struct TypeChecker *tc, struct ASTNode *node);
+void misra_check_shadowing(struct TypeChecker *tc, const char *name, Token token);
+void misra_check_double_initialization(struct TypeChecker *tc, const char *field_name, Token token);
 
 // Section 17: Functions
 void misra_check_recursion(struct TypeChecker *tc, Token token);
@@ -82,5 +85,6 @@ void misra_audit_identifier_uniqueness(struct TypeChecker *tc);
 // Zen C Extensions
 void misra_check_raw_block(struct TypeChecker *tc, Token token);
 void misra_check_plugin_block(struct TypeChecker *tc, Token token);
+void misra_check_reserved_identifier(struct TypeChecker *tc, const char *name, Token token);
 
 #endif // PLATFORM_MISRA_H

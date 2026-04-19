@@ -274,6 +274,20 @@ int is_float_type(Type *t)
     return res;
 }
 
+int is_incomplete_type(struct ParserContext *ctx, Type *t)
+{
+    if (!t || t->kind != TYPE_STRUCT || !t->name)
+    {
+        return 0;
+    }
+    ASTNode *def = find_struct_def(ctx, t->name);
+    if (!def)
+    {
+        return 1;
+    }
+    return def->strct.is_incomplete;
+}
+
 int is_composite_expression(ASTNode *node)
 {
     if (!node)
@@ -621,7 +635,7 @@ static char *type_to_string_impl(Type *t)
                 free(res);
                 res = tmp;
             }
-            char *tmp = xmalloc(strlen(res) + strlen(ret) + 5); // ) -> Ret
+            char *tmp = xmalloc(strlen(res) + strlen(ret) + 6); // ) -> Ret
             sprintf(tmp, "%s) -> %s", res, ret);
             free(res);
             res = tmp;

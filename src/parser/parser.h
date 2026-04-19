@@ -784,12 +784,12 @@ char *extract_module_name(const char *path);
 /**
  * @brief Registers an enum variant.
  */
-void register_enum_variant(ParserContext *ctx, const char *ename, const char *vname, int tag);
+void register_enum_variant(ParserContext *ctx, const char *vname, const char *ename, int tag);
 
 /**
  * @brief Finds an enum variant.
  */
-EnumVariantReg *find_enum_variant(ParserContext *ctx, const char *vname);
+EnumVariantReg *find_enum_variant(ParserContext *ctx, const char *name);
 
 // Lambda helpers
 /**

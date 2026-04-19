@@ -10,6 +10,11 @@
 #include "ast.h"
 #include "zprep_plugin.h"
 
+// Flag to track whether we're emitting a call expression callee.
+// When true, codegen_var_expr should not auto-call no-payload enum variants
+// because the parent NODE_EXPR_CALL will add the ().
+static int g_emitting_callee = 0;
+
 // Helper to suggest standard library imports for common missing functions
 static const char *get_missing_function_hint(ParserContext *ctx, const char *name)
 {
@@ -182,17 +187,24 @@ static void codegen_var_expr(ParserContext *ctx, ASTNode *node, FILE *out)
         }
     }
 
-    // Check for static method call pattern: Type::method or Slice<T>::method
-    char *double_colon = strstr(node->var_ref.name, "::");
-    if (double_colon)
+    // Check for static method call pattern: Type::method or Type__method
+    char *sep = strstr(node->var_ref.name, "::");
+    int sep_len = 2;
+    if (!sep)
+    {
+        sep = strstr(node->var_ref.name, "__");
+        sep_len = 2;
+    }
+
+    if (sep)
     {
         // Extract type name and method name
-        int type_len = double_colon - node->var_ref.name;
+        int type_len = sep - node->var_ref.name;
         char *type_name = xmalloc(type_len + 1);
         strncpy(type_name, node->var_ref.name, type_len);
         type_name[type_len] = 0;
 
-        char *method_name = double_colon + 2; // Skip ::
+        char *method_name = sep + sep_len;
 
         // Handle generic types: Slice<int> -> Slice_int
         char *mangled_type;
@@ -212,6 +224,33 @@ static void codegen_var_expr(ParserContext *ctx, ASTNode *node, FILE *out)
             }
         }
         emit_mangled_name(ctx, out, mangled_type, method_name);
+
+        // If it's a no-payload enum variant and we're NOT inside a call expression callee,
+        // auto-call the constructor. When g_emitting_callee is set, the parent
+        // NODE_EXPR_CALL will add the ().
+        if (!g_emitting_callee)
+        {
+            EnumVariantReg *ev = find_enum_variant(ctx, method_name);
+            if (ev)
+            {
+                const char *clean_ev = ev->enum_name;
+                if (strncmp(clean_ev, "struct ", 7) == 0)
+                {
+                    clean_ev += 7;
+                }
+                const char *clean_mangled = mangled_type;
+                if (strncmp(clean_mangled, "struct ", 7) == 0)
+                {
+                    clean_mangled += 7;
+                }
+
+                if (strcmp(clean_ev, clean_mangled) == 0)
+                {
+                    fprintf(out, "()");
+                }
+            }
+        }
+
         free(type_name);
         free(mangled_type);
         return;
@@ -1268,7 +1307,9 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
             }
         }
 
+        g_emitting_callee = 1;
         codegen_expression(ctx, node->call.callee, out);
+        g_emitting_callee = 0;
     skip_callee_gen:
         fprintf(out, "(");
 

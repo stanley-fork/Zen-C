@@ -1,6 +1,7 @@
 #include "analysis/typecheck.h"
 #include "ast/ast.h"
 #include "constants.h"
+#include "platform/misra.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -243,6 +244,12 @@ void misra_check_pointer_conversion(TypeChecker *tc, Type *target, Type *source,
         // Qualification differences are handled by Rule 11.8.
         if (rti && rsi)
         {
+            // Rule 11.2: Pointer to incomplete type
+            if (is_incomplete_type(tc->pctx, rti) || is_incomplete_type(tc->pctx, rsi))
+            {
+                tc_error(tc, token, "MISRA Rule 11.2");
+            }
+
             TypeKind tk = rti->kind;
             TypeKind sk = rsi->kind;
 
@@ -479,6 +486,8 @@ void misra_check_match_stmt(TypeChecker *tc, ASTNode *node)
     {
         return;
     }
+
+    misra_check_strict_match(tc, node);
 
     int has_default = 0;
     int case_count = 0;
@@ -1045,7 +1054,7 @@ void misra_check_raw_block(struct TypeChecker *tc, Token token)
 {
     if (g_config.misra_mode)
     {
-        tc_error(tc, token, "Rule Zen 1.1");
+        tc_error(tc, token, "MISRA Rule Zen 1.1");
     }
 }
 
@@ -1053,6 +1062,78 @@ void misra_check_plugin_block(struct TypeChecker *tc, Token token)
 {
     if (g_config.misra_mode)
     {
-        tc_error(tc, token, "Rule Zen 1.2");
+        tc_error(tc, token, "MISRA Rule Zen 1.2");
+    }
+}
+
+void misra_check_strict_match(TypeChecker *tc, ASTNode *node)
+{
+    if (!g_config.misra_mode || !node || node->type != NODE_MATCH || !node->match_stmt.expr)
+    {
+        return;
+    }
+
+    Type *expr_type = resolve_alias(node->match_stmt.expr->type_info);
+    if (!expr_type || expr_type->kind != TYPE_ENUM)
+    {
+        return;
+    }
+
+    ASTNode *case_node = node->match_stmt.cases;
+    while (case_node)
+    {
+        if (case_node->match_case.is_default)
+        {
+            tc_error(tc, case_node->token, "MISRA Rule Zen 1.3");
+        }
+        case_node = case_node->next;
+    }
+}
+
+void misra_check_shadowing(TypeChecker *tc, const char *name, Token loc)
+{
+    if (!g_config.misra_mode || !name || !tc->pctx->current_scope ||
+        !tc->pctx->current_scope->parent)
+    {
+        return;
+    }
+
+    ZenSymbol *shadowed = symbol_lookup(tc->pctx->current_scope->parent, name);
+    if (shadowed)
+    {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "MISRA Rule Zen 1.8: Identifier '%s' shadows an existing symbol in an outer scope",
+                 name);
+        tc_error(tc, loc, msg);
+    }
+}
+
+void misra_check_double_initialization(struct TypeChecker *tc, const char *field_name, Token token)
+{
+    if (!g_config.misra_mode)
+    {
+        return;
+    }
+    char msg[256];
+    snprintf(msg, sizeof(msg), "MISRA Rule 9.4: Re-initialization of struct field '%s'",
+             field_name);
+    tc_error(tc, token, msg);
+}
+
+void misra_check_reserved_identifier(struct TypeChecker *tc, const char *name, Token token)
+{
+    if (!g_config.misra_mode || !name)
+    {
+        return;
+    }
+
+    // Rule Zen 1.4: Reserved identifiers
+    // 1. Standard C: start with __ or _ followed by uppercase
+    // 2. Zen Internal: start with _z_
+    if ((name[0] == '_' && (name[1] == '_' || (name[1] >= 'A' && name[1] <= 'Z'))) ||
+        (strncmp(name, "_z_", 3) == 0))
+    {
+        tc_error(tc, token, "MISRA Rule Zen 1.4");
     }
 }

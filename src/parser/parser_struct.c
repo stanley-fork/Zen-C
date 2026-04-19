@@ -1303,7 +1303,7 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l, const char *link_name, int is_
             snprintf(mangled_tmp, mangled_sz, "%s__%s", base_for_mangling, vname);
             char *mangled = merge_underscores(mangled_tmp);
             free(mangled_tmp);
-            register_enum_variant(ctx, ename, mangled, va->variant.tag_id);
+            register_enum_variant(ctx, vname, ename, va->variant.tag_id);
 
             // Register Constructor Function Signature
             if (payload && !gp) // Only for non-generic enums for now
@@ -1337,15 +1337,8 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l, const char *link_name, int is_
             }
             else if (!gp)
             {
-                // No payload: fn Name() -> Enum
-                Type *ret_t = type_new(TYPE_ENUM);
-                ret_t->name = xstrdup(ename);
-                if (link_name)
-                {
-                    ret_t->link_name = xstrdup(link_name);
-                }
-                register_func(ctx, ctx->current_scope, mangled, 0, NULL, NULL, ret_t, 0, 0, 0,
-                              mangled, vt, is_export);
+                // No payload: don't register as function.
+                // Codegen handles calling the constructor via codegen_var_expr.
             }
             free(mangled);
 

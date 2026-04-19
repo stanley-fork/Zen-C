@@ -559,6 +559,7 @@ void register_symbol_to_lsp(ParserContext *ctx, ZenSymbol *s)
         lsp_copy->cfg_condition = xstrdup(s->cfg_condition);
     }
 
+    lsp_copy->is_local = s->is_local;
     lsp_copy->next = ctx->all_symbols;
     ctx->all_symbols = lsp_copy;
 }
@@ -599,6 +600,7 @@ void add_symbol_with_token(ParserContext *ctx, const char *n, const char *t, Typ
     }
 
     ZenSymbol *s = symbol_add(ctx->current_scope, n, SYM_VARIABLE);
+    s->is_local = (ctx->current_scope != ctx->global_scope);
     s->type_name = t ? xstrdup(t) : NULL;
     s->type_info = type_info;
     s->decl_token = tok;
@@ -610,13 +612,39 @@ void add_symbol_with_token(ParserContext *ctx, const char *n, const char *t, Typ
 Type *find_symbol_type_info(ParserContext *ctx, const char *n)
 {
     ZenSymbol *sym = symbol_lookup(ctx->current_scope, n);
-    return sym ? sym->type_info : NULL;
+    if (sym)
+    {
+        return sym->type_info;
+    }
+
+    // Fallback: check for enum variants (MISRA Rule Zen 1.3)
+    EnumVariantReg *ev = find_enum_variant(ctx, n);
+    if (ev)
+    {
+        Type *t = type_new(TYPE_ENUM);
+        t->name = xstrdup(ev->enum_name);
+        return t;
+    }
+
+    return NULL;
 }
 
 char *find_symbol_type(ParserContext *ctx, const char *n)
 {
     ZenSymbol *sym = symbol_lookup(ctx->current_scope, n);
-    return sym ? sym->type_name : NULL;
+    if (sym)
+    {
+        return sym->type_name ? xstrdup(sym->type_name) : NULL;
+    }
+
+    // Fallback: check for enum variants (MISRA Rule Zen 1.3)
+    EnumVariantReg *ev = find_enum_variant(ctx, n);
+    if (ev)
+    {
+        return xstrdup(ev->enum_name);
+    }
+
+    return NULL;
 }
 
 ZenSymbol *find_symbol_entry(ParserContext *ctx, const char *n)
@@ -1107,7 +1135,7 @@ void add_instantiated_func(ParserContext *ctx, ASTNode *fn)
     ctx->instantiated_funcs = fn;
 }
 
-void register_enum_variant(ParserContext *ctx, const char *ename, const char *vname, int tag)
+void register_enum_variant(ParserContext *ctx, const char *vname, const char *ename, int tag)
 {
     // In LSP mode, check for existing variant to avoid duplicates
     if (g_config.mode_lsp)
@@ -1131,16 +1159,44 @@ void register_enum_variant(ParserContext *ctx, const char *ename, const char *vn
     ctx->enum_variants = r;
 }
 
-EnumVariantReg *find_enum_variant(ParserContext *ctx, const char *vname)
+EnumVariantReg *find_enum_variant(ParserContext *ctx, const char *name)
 {
+    char *ename = NULL;
+    const char *vname = name;
+    const char *sep = strstr(name, "::");
+    if (!sep)
+    {
+        sep = strstr(name, "__");
+    }
+
+    if (sep)
+    {
+        int elen = (int)(sep - name);
+        ename = xmalloc(elen + 1);
+        strncpy(ename, name, elen);
+        ename[elen] = 0;
+        vname = sep + 2;
+    }
+
     EnumVariantReg *r = ctx->enum_variants;
     while (r)
     {
         if (strcmp(r->variant_name, vname) == 0)
         {
-            return r;
+            if (!ename || strcmp(r->enum_name, ename) == 0)
+            {
+                if (ename)
+                {
+                    free(ename);
+                }
+                return r;
+            }
         }
         r = r->next;
+    }
+    if (ename)
+    {
+        free(ename);
     }
     return NULL;
 }

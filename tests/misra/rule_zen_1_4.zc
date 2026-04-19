@@ -1,0 +1,17 @@
+// Rule Zen 1.4: Reserved identifiers shall not be used.
+// Reserved identifiers:
+// 1. Start with __
+// 2. Start with _ followed by an uppercase letter
+// 3. Start with _z_ (compiler internal)
+
+fn main() -> i32 {
+    let __illegal = 1;     // EXPECT: Rule Zen 1.4
+    let _Illegal = 2;      // EXPECT: Rule Zen 1.4
+    let _z_internal = 3;   // EXPECT: Rule Zen 1.4
+    let valid_name = 4;    // OK
+    return 0;
+}
+
+struct __BadStruct { x: i32 } // EXPECT: Rule Zen 1.4
+enum _BadEnum { A }           // EXPECT: Rule Zen 1.4
+type _z_BadAlias = i32;       // EXPECT: Rule Zen 1.4

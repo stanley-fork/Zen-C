@@ -192,6 +192,10 @@ static void tc_exit_scope(TypeChecker *tc)
 
 static void tc_add_symbol(TypeChecker *tc, const char *name, Type *type, Token t, int is_immutable)
 {
+    if (g_config.misra_mode)
+    {
+        misra_check_shadowing(tc, name, t);
+    }
     add_symbol_with_token(tc->pctx, name, NULL, type, t, 0);
     ZenSymbol *sym = symbol_lookup(tc->pctx->current_scope, name);
     if (sym)
@@ -932,7 +936,15 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node, int depth)
                 if (!global_sym && !should_suppress_undef_warning(tc->pctx, func_name))
                 {
                     char msg[MAX_SHORT_MSG_LEN];
-                    snprintf(msg, sizeof(msg), "Undefined function '%s'", func_name);
+                    if (g_config.misra_mode)
+                    {
+                        snprintf(msg, sizeof(msg), "Undefined function '%s' (MISRA Rule 17.3)",
+                                 func_name);
+                    }
+                    else
+                    {
+                        snprintf(msg, sizeof(msg), "Undefined function '%s'", func_name);
+                    }
                     const char *hints[] = {"Check if the function is defined or imported", NULL};
                     tc_error_with_hints(tc, node->call.callee->token, msg, hints);
                 }
@@ -1538,6 +1550,7 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node, int depth)
         node->type_info = t;
     }
 
+    misra_check_reserved_identifier(tc, node->var_decl.name, node->token);
     tc_add_symbol(tc, node->var_decl.name, t, node->token, 0);
     ZenSymbol *new_sym = tc_lookup(tc, node->var_decl.name);
     if (new_sym)
@@ -1651,6 +1664,9 @@ static void check_function(TypeChecker *tc, ASTNode *node, int depth)
     // Mark return type as used
     mark_type_as_used(tc, node->func.ret_type_info);
 
+    // Rule Zen 1.4: Reserved identifiers
+    misra_check_reserved_identifier(tc, node->func.name, node->token);
+
     tc->current_func = node;
     tc_enter_scope(tc);
 
@@ -1668,6 +1684,7 @@ static void check_function(TypeChecker *tc, ASTNode *node, int depth)
                 (node->func.arg_types && node->func.arg_types[i]) ? node->func.arg_types[i] : NULL;
 
             misra_check_pointer_nesting(tc, param_type, node->token);
+            misra_check_reserved_identifier(tc, node->func.param_names[i], node->token);
             tc_add_symbol(tc, node->func.param_names[i], param_type, node->token,
                           g_config.misra_mode);
         }
@@ -1745,6 +1762,23 @@ static void check_function(TypeChecker *tc, ASTNode *node, int depth)
 
 static void check_expr_var(TypeChecker *tc, ASTNode *node)
 {
+    // Check if it's an enum variant FIRST, prioritizing value over function constructor if no
+    // payload
+    EnumVariantReg *ev = find_enum_variant(tc->pctx, node->var_ref.name);
+    if (ev)
+    {
+        FuncSig *sig = find_func(tc->pctx, node->var_ref.name);
+        // If it's a no-payload variant, treat it as an enum value (TYPE_ENUM)
+        // If it has payloads, it's a constructor function (TYPE_FUNCTION)
+        if (!sig || sig->total_args == 0)
+        {
+            Type *et = type_new(TYPE_ENUM);
+            et->name = xstrdup(ev->enum_name);
+            node->type_info = et;
+            return;
+        }
+    }
+
     ZenSymbol *sym = tc_lookup(tc, node->var_ref.name);
 
     if (sym && sym->type_info)
@@ -1753,7 +1787,8 @@ static void check_expr_var(TypeChecker *tc, ASTNode *node)
     }
     else
     {
-        // Check if it's a mangled function name (e.g. from :: operator)
+        // Fallback: Check if it's a mangled function name (e.g. from :: operator or enum
+        // constructor)
         FuncSig *sig = find_func(tc->pctx, node->var_ref.name);
         if (sig)
         {
@@ -1770,6 +1805,13 @@ static void check_expr_var(TypeChecker *tc, ASTNode *node)
                 }
             }
             node->type_info = fn_type;
+        }
+        else if (g_config.misra_mode)
+        {
+            char msg[MAX_SHORT_MSG_LEN];
+            snprintf(msg, sizeof(msg), "Undefined variable '%s' (MISRA Rule 17.3)",
+                     node->var_ref.name);
+            tc_error(tc, node->token, msg);
         }
     }
 
@@ -1861,6 +1903,22 @@ static void check_struct_init(TypeChecker *tc, ASTNode *node, int depth)
     ASTNode *field_init = node->struct_init.fields;
     while (field_init)
     {
+        // Rule 9.4: Double initialization check
+        if (g_config.misra_mode)
+        {
+            ASTNode *prev = node->struct_init.fields;
+            while (prev != field_init)
+            {
+                if (strcmp(prev->var_decl.name, field_init->var_decl.name) == 0)
+                {
+                    misra_check_double_initialization(tc, field_init->var_decl.name,
+                                                      field_init->token);
+                    break;
+                }
+                prev = prev->next;
+            }
+        }
+
         // Find corresponding field in definition
         ASTNode *def_field = def->strct.fields;
         Type *expected_type = NULL;
@@ -2454,8 +2512,8 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
         break;
     }
     case NODE_MATCH:
-        misra_check_match_stmt(tc, node);
         check_node(tc, node->match_stmt.expr, depth + 1);
+        misra_check_match_stmt(tc, node);
         // Visit each match case
         {
             MoveState *match_initial_state = tc->pctx->move_state;
@@ -2535,13 +2593,23 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
         break;
     case NODE_STRUCT:
     case NODE_ENUM:
+    case NODE_TYPE_ALIAS:
         if (node->type == NODE_STRUCT)
         {
+            misra_check_reserved_identifier(tc, node->strct.name, node->token);
             misra_check_struct_decl(tc, node);
             if (node->strct.is_union)
             {
                 misra_check_union(tc, node->token);
             }
+        }
+        else if (node->type == NODE_ENUM)
+        {
+            misra_check_reserved_identifier(tc, node->enm.name, node->token);
+        }
+        else if (node->type == NODE_TYPE_ALIAS)
+        {
+            misra_check_reserved_identifier(tc, node->type_alias.alias, node->token);
         }
         break;
     case NODE_WHILE:
@@ -2931,8 +2999,17 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
             if (!sym)
             {
                 char msg[MAX_SHORT_MSG_LEN];
-                snprintf(msg, sizeof(msg), "Undefined output variable in inline assembly: '%s'",
-                         node->asm_stmt.outputs[i]);
+                if (g_config.misra_mode)
+                {
+                    snprintf(msg, sizeof(msg),
+                             "Undefined output variable in inline assembly: '%s' (MISRA Rule 17.3)",
+                             node->asm_stmt.outputs[i]);
+                }
+                else
+                {
+                    snprintf(msg, sizeof(msg), "Undefined output variable in inline assembly: '%s'",
+                             node->asm_stmt.outputs[i]);
+                }
                 tc_error(tc, node->token, msg);
             }
             else if (sym->type_info)
@@ -2950,8 +3027,17 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
             if (!sym)
             {
                 char msg[MAX_SHORT_MSG_LEN];
-                snprintf(msg, sizeof(msg), "Undefined input variable in inline assembly: '%s'",
-                         node->asm_stmt.inputs[i]);
+                if (g_config.misra_mode)
+                {
+                    snprintf(msg, sizeof(msg),
+                             "Undefined input variable in inline assembly: '%s' (MISRA Rule 17.3)",
+                             node->asm_stmt.inputs[i]);
+                }
+                else
+                {
+                    snprintf(msg, sizeof(msg), "Undefined input variable in inline assembly: '%s'",
+                             node->asm_stmt.inputs[i]);
+                }
                 tc_error(tc, node->token, msg);
             }
             else if (sym->type_info)
