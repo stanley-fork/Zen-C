@@ -2114,6 +2114,7 @@ static void check_function(TypeChecker *tc, ASTNode *node, int depth)
 
     int prev_unreachable = tc->is_unreachable;
     tc->is_unreachable = 0;
+    tc->func_return_count = 0;
 
     MoveState *prev_move_state = tc->pctx->move_state;
     tc->pctx->move_state = move_state_create(NULL);
@@ -2202,6 +2203,16 @@ static void check_function(TypeChecker *tc, ASTNode *node, int depth)
                 }
             }
         }
+    }
+
+    // MISRA Rule 15.5: A function shall have a single point of exit at the end.
+    if (g_config.misra_mode && tc->func_return_count > 1)
+    {
+        char msg[MAX_ERROR_MSG_LEN];
+        snprintf(msg, sizeof(msg),
+                 "MISRA Rule 15.5: function '%s' has %d return points (must have 1)",
+                 node->func.name ? node->func.name : "anonymous", tc->func_return_count);
+        tc_error(tc, node->token, msg);
     }
 
     tc->is_unreachable = prev_unreachable;
@@ -2865,6 +2876,7 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
         check_expr_literal(tc, node);
         break;
     case NODE_RETURN:
+        tc->func_return_count++;
         if (node->ret.value)
         {
             check_node(tc, node->ret.value, depth + 1);
@@ -3024,6 +3036,16 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
                     tc->is_unreachable = match_initial_unreachable;
 
                     check_node(tc, mcase->match_case.body, depth + 1);
+
+                    // MISRA Rule 16.3: An unconditional break or return shall terminate every
+                    // switch-clause
+                    if (g_config.misra_mode && !tc->is_unreachable && mcase->match_case.body &&
+                        mcase->match_case.body->type == NODE_BLOCK &&
+                        mcase->match_case.body->block.statements)
+                    {
+                        tc_error(tc, mcase->token,
+                                 "MISRA Rule 16.3: match case must end in break or return");
+                    }
 
                     if (!tc->is_unreachable)
                     {
