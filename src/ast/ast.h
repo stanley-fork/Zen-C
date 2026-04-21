@@ -85,6 +85,7 @@ typedef enum
 typedef struct Type
 {
     TypeKind kind;          ///< The kind of type.
+    int lifetime_depth;     ///< Nesting depth of this type's lifetime (0 = static, >0 = local).
     char *name;             ///< Name of the type (for STRUCT, GENERIC, ENUM).
     char *link_name;        ///< Optional linkage override (from @link_name).
     struct Type *inner;     ///< Inner type (for POINTER, ARRAY).
@@ -705,6 +706,7 @@ void ast_free(ASTNode *node);
 Type *type_new(TypeKind kind);
 Type *type_new_ptr(Type *inner);
 Type *type_new_array(Type *inner, int size);
+Type *type_clone(Type *t);
 Type *type_new_vector(Type *inner, int size);
 int type_eq(Type *a, Type *b);
 int is_integer_type(Type *t);

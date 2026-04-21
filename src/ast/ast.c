@@ -143,6 +143,28 @@ Type *type_new_vector(Type *inner, int size)
     return t;
 }
 
+Type *type_clone(Type *t)
+{
+    if (!t)
+    {
+        return NULL;
+    }
+    Type *clone = xmalloc(sizeof(Type));
+    memcpy(clone, t, sizeof(Type));
+
+    // In Zen C, we only clone the top-level Type struct to isolate usage-site metadata
+    // like lifetime_depth. However, we SHIELD the recursive structures (inner, args)
+    // by sharing their pointers. This ensures that type inference (which may happen
+    // at a usage site) correctly propagates back to the canonical Type objects
+    // that the codegen and other passes depend on.
+    // clone->inner = t->inner; // Already done by memcpy
+    // clone->args = t->args;   // Already done by memcpy
+
+    // Note: Strings like name and link_name are shared (shallow copy)
+    // but names are usually static or managed by pctx string pool.
+    return clone;
+}
+
 int is_char_ptr(Type *t)
 {
     if (!t)

@@ -811,6 +811,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l, int is_export)
     n->var_decl.name = name;
     n->var_decl.type_str = type;
     n->var_decl.is_let = is_decl_let;
+    n->var_decl.type_info = type_obj;
     n->type_info = type_obj;
 
     // Auto-construct Trait Object

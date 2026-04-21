@@ -391,11 +391,16 @@ static int is_char_type(Type *t)
 
 static void tc_enter_scope(TypeChecker *tc)
 {
+    tc->current_depth++;
     enter_scope(tc->pctx);
 }
 
 static void tc_exit_scope(TypeChecker *tc)
 {
+    if (tc->current_depth > 0)
+    {
+        tc->current_depth--;
+    }
     exit_scope(tc->pctx);
 }
 
@@ -411,6 +416,7 @@ static void tc_add_symbol(TypeChecker *tc, const char *name, Type *type, Token t
     if (sym)
     {
         sym->is_immutable = is_immutable;
+        sym->scope_depth = tc->current_depth;
     }
 }
 
@@ -558,7 +564,7 @@ static void check_expr_lambda(TypeChecker *tc, ASTNode *node, int depth);
 static void apply_implicit_struct_pointer_conversions(TypeChecker *tc, ASTNode **expr_ptr,
                                                       Type *expected_type);
 static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, Token t,
-                                    ASTNode *value_node);
+                                    ASTNode *value_node, int is_call_arg);
 
 static void check_move_for_rvalue(TypeChecker *tc, ASTNode *rvalue)
 {
@@ -726,9 +732,38 @@ static void check_expr_unary(TypeChecker *tc, ASTNode *node, int depth)
     }
 
     // Address-of: &
-    if (strcmp(op, "&") == 0)
+    if (strcmp(op, "&") == 0 || strcmp(op, "&_rval") == 0)
     {
         node->type_info = type_new_ptr(operand_type);
+        // Record provenance depth for escape analysis
+        if (node->unary.operand->type == NODE_EXPR_VAR)
+        {
+            ZenSymbol *sym = tc_lookup(tc, node->unary.operand->var_ref.name);
+            if (sym)
+            {
+                node->type_info->lifetime_depth = sym->scope_depth;
+            }
+        }
+        else if (strcmp(op, "&_rval") == 0)
+        {
+            // R-values are temporaries, their life is the current code block
+            if (node->unary.operand->type_info)
+            {
+                node->type_info->lifetime_depth = node->unary.operand->type_info->lifetime_depth;
+            }
+            else
+            {
+                node->type_info->lifetime_depth = tc->current_depth;
+            }
+        }
+        else
+        {
+            // For complex targets (e.g. &array[0]), inherit from the operand if it has a lifetime
+            if (operand_type)
+            {
+                node->type_info->lifetime_depth = operand_type->lifetime_depth;
+            }
+        }
         return;
     }
 }
@@ -736,6 +771,7 @@ static void check_expr_unary(TypeChecker *tc, ASTNode *node, int depth)
 static void check_expr_binary(TypeChecker *tc, ASTNode *node, int depth)
 {
     const char *op = node->binary.op;
+    Type *contextual_type = node->type_info;
 
     if (strcmp(op, "=") == 0 ||
         (strlen(op) > 1 && op[strlen(op) - 1] == '=' && strcmp(op, "==") != 0 &&
@@ -855,7 +891,7 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node, int depth)
             apply_implicit_struct_pointer_conversions(tc, &node->binary.right, left_type);
             right_type = node->binary.right->type_info;
             check_type_compatibility(tc, left_type, right_type, node->binary.right->token,
-                                     node->binary.right);
+                                     node->binary.right, 0);
 
             // Mark LHS as written to
             if (node->binary.left->type == NODE_EXPR_VAR)
@@ -1037,8 +1073,12 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node, int depth)
                 misra_check_binary_op_essential_types(tc, node->binary.left, node->binary.right,
                                                       node->token);
 
-                // Rule 12.4: Evaluation of constant expressions shall not lead to unsigned wrap
-                if (g_config.misra_mode && left_type && is_integer_type(left_type))
+                // MISRA Rule 12.4: Evaluation of constant expressions shall not lead to unsigned
+                // wrap Use the contextually pushed down type (stored in node->type_info before this
+                // function) or fall back to the inferred operand type.
+                Type *target_type = contextual_type ? contextual_type : left_type;
+
+                if (g_config.misra_mode && target_type && is_integer_type(target_type))
                 {
                     long long lval, rval;
                     if (eval_const_int_expr(node->binary.left, tc->pctx, &lval) &&
@@ -1060,22 +1100,26 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node, int depth)
 
                         if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0 || strcmp(op, "*") == 0)
                         {
-                            misra_check_unsigned_wrap(tc, op, lval, rval, res, left_type,
+                            misra_check_unsigned_wrap(tc, op, lval, rval, res, target_type,
                                                       node->token);
                         }
                     }
                 }
+
                 // Rule 10.2: Character arithmetic
                 misra_check_char_arithmetic(tc, left_type, right_type, op, node->token);
 
-                // Result type: if either is float, result is float; else left type
-                if (is_float_type(left_type) || is_float_type(right_type))
+                // Result type: Only infer if not already set by context
+                if (!node->type_info)
                 {
-                    node->type_info = type_new(TYPE_F64);
-                }
-                else
-                {
-                    node->type_info = left_type;
+                    if (is_float_type(left_type) || is_float_type(right_type))
+                    {
+                        node->type_info = type_new(TYPE_F64);
+                    }
+                    else
+                    {
+                        node->type_info = left_type;
+                    }
                 }
             }
         }
@@ -1406,7 +1450,7 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node, int depth)
             else
             {
                 check_type_compatibility(tc, expected_rec, actual_rec, node->call.callee->token,
-                                         NULL);
+                                         NULL, 1);
             }
         }
         sig_arg_idx = 1;
@@ -1478,7 +1522,7 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node, int depth)
                 }
             }
 
-            check_type_compatibility(tc, expected, actual, arg->token, arg);
+            check_type_compatibility(tc, expected, actual, arg->token, arg, 1);
         }
 
         // If argument is passed by VALUE, check if it can be moved.
@@ -1491,7 +1535,10 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node, int depth)
     // Propagate return type from function signature
     if (sig && sig->ret_type && !node->type_info)
     {
-        node->type_info = sig->ret_type;
+        // Deep clone return type to ensure caller doesn't modify callee's metadata
+        node->type_info = type_clone(sig->ret_type);
+        // Function results always have depth 0 (static/heap/escaping) by default
+        node->type_info->lifetime_depth = 0;
     }
     else if (!node->type_info && node->call.callee && node->call.callee->type_info)
     {
@@ -1662,7 +1709,7 @@ static void apply_implicit_struct_pointer_conversions(TypeChecker *tc, ASTNode *
 }
 
 static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, Token t,
-                                    ASTNode *value_node)
+                                    ASTNode *value_node, int is_call_arg)
 {
     if (!target || !value)
     {
@@ -1712,6 +1759,24 @@ static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, 
             }
         }
         return 1; // All integer pairs compatible (modulo MISRA/Warning checks above)
+    }
+
+    // Lifetime/Escape Analysis Check (Rule against Use-After-Free)
+    if (!is_call_arg && resolved_target->kind == TYPE_POINTER &&
+        resolved_value->kind == TYPE_POINTER)
+    {
+        // Higher depth = shorter scope.
+        if (resolved_target->lifetime_depth < resolved_value->lifetime_depth)
+        {
+            char msg[MAX_ERROR_MSG_LEN];
+            snprintf(msg, sizeof(msg),
+                     "Escape analysis error: pointer assigned to a location that outlives it");
+            const char *hints[] = {"The source pointer belongs to a child scope and will become "
+                                   "invalid when that scope ends.",
+                                   "Consider copying the value instead of taking a reference.",
+                                   NULL};
+            tc_error_with_hints(tc, t, msg, hints);
+        }
     }
 
     // Fast path: exact match
@@ -1844,9 +1909,15 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node, int depth)
     // MISRA: Mark type as used
     mark_type_as_used(tc, node->var_decl.type_info);
 
+    // Initialize lifetime depth for escape analysis if this is a local variable
+    if (node->var_decl.type_info && tc->current_func)
+    {
+        node->var_decl.type_info->lifetime_depth = tc->current_depth;
+    }
+
     if (node->var_decl.init_expr)
     {
-        if (node->type_info && node->var_decl.init_expr->type == NODE_LAMBDA)
+        if (node->type_info)
         {
             node->var_decl.init_expr->type_info = node->type_info;
         }
@@ -1855,15 +1926,22 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node, int depth)
         check_node(tc, node->var_decl.init_expr, depth + 1);
         tc->is_stmt_context = old_stmt_ctx;
 
-        Type *decl_type = node->type_info;
+        Type *decl_type = node->var_decl.type_info;
         Type *init_type = node->var_decl.init_expr->type_info;
 
         if (decl_type && init_type)
         {
             apply_implicit_struct_pointer_conversions(tc, &node->var_decl.init_expr, decl_type);
             init_type = node->var_decl.init_expr->type_info;
-            check_type_compatibility(tc, decl_type, init_type, node->token,
-                                     node->var_decl.init_expr);
+
+            // The declared type retains its original lifetime metadata (from init or explicit decl)
+
+            // If initialization exists, check compatibility
+            if (node->var_decl.type_info)
+            {
+                check_type_compatibility(tc, node->var_decl.type_info, init_type, node->token,
+                                         node->var_decl.init_expr, 0);
+            }
 
             if (g_config.misra_mode)
             {
@@ -1896,8 +1974,14 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node, int depth)
     Type *t = node->type_info;
     if (!t && node->var_decl.init_expr)
     {
-        t = node->var_decl.init_expr->type_info;
+        t = type_clone(node->var_decl.init_expr->type_info);
+        // Ensure inferred local variables get the correct scope depth for escape analysis
+        if (t && tc->current_func)
+        {
+            t->lifetime_depth = tc->current_depth;
+        }
         node->type_info = t;
+        node->var_decl.type_info = t;
     }
 
     misra_check_reserved_identifier(tc, node->var_decl.name, node->token);
@@ -2048,7 +2132,14 @@ static void check_function(TypeChecker *tc, ASTNode *node, int depth)
         }
     }
 
-    misra_check_pointer_nesting(tc, node->func.ret_type_info, node->token);
+    if (node->func.ret_type_info)
+    {
+        misra_check_pointer_nesting(tc, node->func.ret_type_info, node->token);
+        // Deep clone to avoid metadata leakage
+        Type *cloned_ret = type_clone(node->func.ret_type_info);
+        cloned_ret->lifetime_depth = 1;
+        node->func.ret_type_info = cloned_ret;
+    }
 
     check_node(tc, node->func.body, depth + 1);
 
@@ -2142,7 +2233,8 @@ static void check_expr_var(TypeChecker *tc, ASTNode *node)
 
     if (sym && sym->type_info)
     {
-        node->type_info = sym->type_info;
+        // Clone the type to keep metadata (like lifetime_depth) isolated per usage site
+        node->type_info = type_clone(sym->type_info);
 
         // Rule 8.9 tracking: Identify globals used in only one function
         if (!sym->is_local && sym->kind == SYM_VARIABLE && tc->current_func)
@@ -2336,7 +2428,7 @@ static void check_struct_init(TypeChecker *tc, ASTNode *node, int depth)
         else if (expected_type && field_init->var_decl.init_expr->type_info)
         {
             check_type_compatibility(tc, expected_type, field_init->var_decl.init_expr->type_info,
-                                     field_init->token, field_init->var_decl.init_expr);
+                                     field_init->token, NULL, 0);
         }
 
         // Move Analysis: Check if the initializer moves a non-copy value.
@@ -2792,7 +2884,8 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
                 apply_implicit_struct_pointer_conversions(tc, &node->ret.value,
                                                           tc->current_func->func.ret_type_info);
                 check_type_compatibility(tc, tc->current_func->func.ret_type_info,
-                                         node->ret.value->type_info, node->token, node->ret.value);
+                                         node->ret.value->type_info, node->token, node->ret.value,
+                                         0);
             }
         }
         tc->is_unreachable = 1;
@@ -3371,7 +3464,7 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
             if (t1 && t2)
             {
                 // Loose compatibility check
-                if (!check_type_compatibility(tc, t1, t2, node->token, NULL))
+                if (!check_type_compatibility(tc, t1, t2, node->token, NULL, 0))
                 {
                     // Error reported by check_type_compatibility
                 }

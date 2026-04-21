@@ -37,6 +37,7 @@ typedef struct TypeChecker
     int is_assign_lhs;    ///< If true, currently evaluating LHS of assignment.
     int is_stmt_context;  ///< If true, expression is a top-level statement.
     int loop_break_count; ///< Count of breaks for Rule 15.4
+    int current_depth;    ///< Current nesting level for escape analysis (0=global).
 } TypeChecker;
 
 /**
