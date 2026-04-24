@@ -202,6 +202,8 @@ void run_repl(const char *self_path)
     size_t input_len = 0;
     int brace_depth = 0;
     int paren_depth = 0;
+    int in_quote = 0;
+    int escaped = 0;
 
     while (1)
     {
@@ -229,6 +231,26 @@ void run_repl(const char *self_path)
         const char *prompt = (brace_depth > 0 || paren_depth > 0) ? "... " : prompt_text;
         int indent = (brace_depth > 0) ? brace_depth : 0;
         char *rline = repl_readline(&state, prompt, indent);
+
+        if (state.aborted)
+        {
+            state.aborted = 0;
+            if (input_buffer)
+            {
+                free(input_buffer);
+                input_buffer = NULL;
+                input_len = 0;
+            }
+            brace_depth = 0;
+            paren_depth = 0;
+            in_quote = 0;
+            escaped = 0;
+            if (rline)
+            {
+                free(rline);
+            }
+            continue;
+        }
 
         if (!rline)
         {
@@ -284,8 +306,6 @@ void run_repl(const char *self_path)
         }
 
         /* Track brace/paren depth for multi-line input */
-        int in_quote = 0;
-        int escaped = 0;
         for (int i = 0; line_buf[i]; i++)
         {
             char c = line_buf[i];
@@ -313,7 +333,10 @@ void run_repl(const char *self_path)
                 }
                 if (c == '}')
                 {
-                    brace_depth--;
+                    if (brace_depth > 0)
+                    {
+                        brace_depth--;
+                    }
                 }
                 if (c == '(')
                 {
@@ -321,7 +344,10 @@ void run_repl(const char *self_path)
                 }
                 if (c == ')')
                 {
-                    paren_depth--;
+                    if (paren_depth > 0)
+                    {
+                        paren_depth--;
+                    }
                 }
             }
         }
@@ -515,10 +541,56 @@ void run_repl(const char *self_path)
         fclose(f);
         free(full_code);
 
+        char err_path[MAX_PATH_SIZE];
+        snprintf(err_path, sizeof(err_path), "%s/zprep_repl_err_%d.txt", z_get_temp_dir(), rand());
+
         char cmd[MAX_PATH_LEN];
-        snprintf(cmd, sizeof(cmd), "%s run -q %s", state.self_path, tmp_path);
+        snprintf(cmd, sizeof(cmd), "%s run -q %s 2>%s", state.self_path, tmp_path, err_path);
 
         int ret = system(cmd);
+
+        /* Process and print cleaned errors */
+        FILE *ef = fopen(err_path, "r");
+        if (ef)
+        {
+            char ebuf[MAX_ERROR_MSG_LEN];
+            while (fgets(ebuf, sizeof(ebuf), ef))
+            {
+                char *match = strstr(ebuf, tmp_path);
+                if (match)
+                {
+                    /* Strip path and leading colons */
+                    char *after = match + strlen(tmp_path);
+                    if (*after == ':')
+                    {
+                        after++;
+                    }
+
+                    /* If it's a compiler error line with line/col, make it pretty */
+                    char *next_colon = strchr(after, ':');
+                    if (next_colon)
+                    {
+                        *next_colon = '\0';
+                        printf("error on line %s:%s", after, next_colon + 1);
+                    }
+                    else
+                    {
+                        printf("%s", after);
+                    }
+                }
+                else if (strstr(ebuf, "error:"))
+                {
+                    printf("%s", ebuf);
+                }
+                else
+                {
+                    /* Might be runtime output on stderr or unrelated warnings */
+                    printf("%s", ebuf);
+                }
+            }
+            fclose(ef);
+            remove(err_path);
+        }
         printf("\n");
 
         if (0 != ret)

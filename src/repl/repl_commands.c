@@ -169,8 +169,7 @@ static int cmd_show(ReplState *state, const char *args)
     {
         if (n->type == NODE_FUNCTION && 0 == strcmp(n->func.name, name))
         {
-            printf("  fn %s(%s) -> %s\n", n->func.name,
-                   n->func.args ? n->func.args : "",
+            printf("  fn %s(%s) -> %s\n", n->func.name, n->func.args ? n->func.args : "",
                    n->func.ret_type ? n->func.ret_type : "void");
             found = 1;
             break;
@@ -186,8 +185,7 @@ static int cmd_show(ReplState *state, const char *args)
                 }
                 else if (field->type == NODE_VAR_DECL)
                 {
-                    printf("    %s: %s;\n", field->var_decl.name,
-                           field->var_decl.type_str);
+                    printf("    %s: %s;\n", field->var_decl.name, field->var_decl.type_str);
                 }
             }
             printf("  }\n");
@@ -554,8 +552,7 @@ static int cmd_vars_funcs_structs(ReplState *state, const char *args)
         free(probe_main_code);
 
         int found_vars = 0;
-        if (main_func && main_func->func.body &&
-            main_func->func.body->type == NODE_BLOCK)
+        if (main_func && main_func->func.body && main_func->func.body->type == NODE_BLOCK)
         {
             for (ASTNode *s = main_func->func.body->block.statements; s; s = s->next)
             {
@@ -638,9 +635,8 @@ static int cmd_vars_funcs_structs(ReplState *state, const char *args)
                     }
 
                     char print_stmt[MAX_ERROR_MSG_LEN];
-                    snprintf(print_stmt, sizeof(print_stmt),
-                             "printf(\"  %s (%s): %s\\n\", %s); ", s->var_decl.name, t, fmt,
-                             val_expr);
+                    snprintf(print_stmt, sizeof(print_stmt), "printf(\"  %s (%s): %s\\n\", %s); ",
+                             s->var_decl.name, t, fmt, val_expr);
                     strcat(probe_code, print_stmt);
                     found_vars = 1;
                 }

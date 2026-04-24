@@ -332,10 +332,10 @@ void repl_update_symbols(ReplState *state)
     state->symbol_count = 0;
 
     /* Add stdlib type names */
-    static const char *STDLIB_TYPES[] = {
-        "Vec",    "String", "Map",    "Set",    "Stack",  "Queue",  "Option",
-        "Result", "Arena",  "Slice",  "Regex",  "BigInt", "BigFloat", "Complex",
-        "File",   "Path",   "Thread", "Mutex",  NULL};
+    static const char *STDLIB_TYPES[] = {"Vec",   "String", "Map",      "Set",     "Stack",
+                                         "Queue", "Option", "Result",   "Arena",   "Slice",
+                                         "Regex", "BigInt", "BigFloat", "Complex", "File",
+                                         "Path",  "Thread", "Mutex",    NULL};
 
     for (int i = 0; STDLIB_TYPES[i]; i++)
     {

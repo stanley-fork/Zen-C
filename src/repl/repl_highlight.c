@@ -121,6 +121,17 @@ int get_visible_length(const char *str)
 
 void repl_highlight(const char *buf, int cursor_pos)
 {
+    static int checked_no_color = 0;
+    static int use_color = 1;
+    if (!checked_no_color)
+    {
+        if (getenv("NO_COLOR"))
+        {
+            use_color = 0;
+        }
+        checked_no_color = 1;
+    }
+
     const char *p = buf;
 
     int match_pos = -1;
@@ -146,44 +157,44 @@ void repl_highlight(const char *buf, int cursor_pos)
         // Highlight matching braces
         if (idx == brace_pos || idx == match_pos)
         {
-            printf("\033[1;44;37m"); // Bright White on Blue background
+            if (use_color) printf("\033[1;44;37m"); // Bright White on Blue background
             putchar(*p);
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
             p++;
             continue;
         }
 
         if (strncmp(p, "//", 2) == 0)
         {
-            printf("\033[1;30m");
+            if (use_color) printf("\033[1;30m");
             printf("%s", p);
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
             break;
         }
         else if (*p == ':' && isalpha(p[1]))
         {
-            printf("\033[1;35m");
+            if (use_color) printf("\033[1;35m");
             while (*p && !isspace(*p))
             {
                 putchar(*p);
                 p++;
             }
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
         }
         else if (isdigit(*p))
         {
-            printf("\033[1;35m");
+            if (use_color) printf("\033[1;35m");
             while (isdigit(*p) || *p == '.' || *p == 'x' || *p == 'X')
             {
                 putchar(*p);
                 p++;
             }
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
         }
         else if (*p == '"' || *p == '\'')
         {
             char quote = *p;
-            printf("\033[1;32m");
+            if (use_color) printf("\033[1;32m");
             putchar(*p);
             p++;
             while (*p && *p != quote)
@@ -201,27 +212,27 @@ void repl_highlight(const char *buf, int cursor_pos)
                 putchar(*p);
                 p++;
             }
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
         }
         else if (strchr(",;.", *p))
         {
-            printf("\033[1;30m");
+            if (use_color) printf("\033[1;30m");
             putchar(*p);
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
             p++;
         }
         else if (strchr("{}[]()", *p))
         {
-            printf("\033[0;36m");
+            if (use_color) printf("\033[0;36m");
             putchar(*p);
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
             p++;
         }
         else if (strchr("+-*/=<>!&|^~%", *p))
         {
-            printf("\033[1;37m");
+            if (use_color) printf("\033[1;37m");
             putchar(*p);
-            printf("\033[0m");
+            if (use_color) printf("\033[0m");
             p++;
         }
         else if (isalpha(*p) || *p == '_')
@@ -297,25 +308,28 @@ void repl_highlight(const char *buf, int cursor_pos)
                     }
                 }
 
-                if (is_keyword)
+                if (use_color)
                 {
-                    printf("\033[1;36m");
-                }
-                else if (is_type)
-                {
-                    printf("\033[1;33m");
-                }
-                else if (is_func)
-                {
-                    printf("\033[1;34m");
-                }
-                else if (is_const)
-                {
-                    printf("\033[1;31m");
+                    if (is_keyword)
+                    {
+                        printf("\033[1;36m");
+                    }
+                    else if (is_type)
+                    {
+                        printf("\033[1;33m");
+                    }
+                    else if (is_func)
+                    {
+                        printf("\033[1;34m");
+                    }
+                    else if (is_const)
+                    {
+                        printf("\033[1;31m");
+                    }
                 }
 
                 printf("%s", word);
-                printf("\033[0m");
+                if (use_color) printf("\033[0m");
             }
             else
             {

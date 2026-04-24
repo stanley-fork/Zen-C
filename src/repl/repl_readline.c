@@ -9,10 +9,10 @@
 
 extern const char *REPL_KEYWORDS[];
 
-static const char *COMMANDS[] = {
-    ":help",    ":reset", ":imports", ":vars",  ":funcs", ":structs", ":history", ":type",
-    ":time",    ":c",     ":doc",     ":run",   ":edit",  ":save",    ":load",    ":watch",
-    ":unwatch", ":undo",  ":delete",  ":clear", ":quit",  ":show",    NULL};
+static const char *COMMANDS[] = {":help",    ":reset", ":imports", ":vars",  ":funcs",   ":structs",
+                                 ":history", ":type",  ":time",    ":c",     ":doc",     ":run",
+                                 ":edit",    ":save",  ":load",    ":watch", ":unwatch", ":undo",
+                                 ":delete",  ":clear", ":quit",    ":show",  NULL};
 
 /* ── Tab completion ────────────────────────────────────────────────── */
 
@@ -86,6 +86,32 @@ char *repl_complete(ReplState *state, const char *buf, int pos)
     return NULL;
 }
 
+static int skip_word_forward(const char *buf, int pos, int len)
+{
+    while (pos < len && isspace(buf[pos]))
+    {
+        pos++;
+    }
+    while (pos < len && !isspace(buf[pos]))
+    {
+        pos++;
+    }
+    return pos;
+}
+
+static int skip_word_backward(const char *buf, int pos)
+{
+    while (pos > 0 && isspace(buf[pos - 1]))
+    {
+        pos--;
+    }
+    while (pos > 0 && !isspace(buf[pos - 1]))
+    {
+        pos--;
+    }
+    return pos;
+}
+
 /* ── Line editor ───────────────────────────────────────────────────── */
 
 char *repl_readline(ReplState *state, const char *prompt, int indent_level)
@@ -135,7 +161,7 @@ char *repl_readline(ReplState *state, const char *prompt, int indent_level)
 
         if (c == '\x1b')
         {
-            char seq[3];
+            char seq[6];
             if (!repl_read_char(&seq[0]))
             {
                 continue;
@@ -147,7 +173,43 @@ char *repl_readline(ReplState *state, const char *prompt, int indent_level)
 
             if (seq[0] == '[')
             {
-                if (seq[1] == 'A')
+                if (isdigit(seq[1]))
+                {
+                    if (repl_read_char(&seq[2]) && seq[2] == ';')
+                    {
+                        if (repl_read_char(&seq[3]) && repl_read_char(&seq[4]))
+                        {
+                            if (seq[4] == 'C')
+                            { // Ctrl+Right
+                                pos = skip_word_forward(buf, pos, len);
+                            }
+                            else if (seq[4] == 'D')
+                            { // Ctrl+Left
+                                pos = skip_word_backward(buf, pos);
+                            }
+                        }
+                    }
+                    else if (seq[2] == '~')
+                    {
+                        if (seq[1] == '1' || seq[1] == '7')
+                        {
+                            pos = 0;
+                        }
+                        else if (seq[1] == '4' || seq[1] == '8')
+                        {
+                            pos = len;
+                        }
+                        else if (seq[1] == '3')
+                        { // Delete key
+                            if (pos < len)
+                            {
+                                memmove(buf + pos, buf + pos + 1, len - pos);
+                                len--;
+                            }
+                        }
+                    }
+                }
+                else if (seq[1] == 'A')
                 {
                     if (history_idx > 0)
                     {
@@ -219,6 +281,17 @@ char *repl_readline(ReplState *state, const char *prompt, int indent_level)
                     pos = len;
                 }
             }
+            else if (seq[0] == 'O')
+            {
+                if (seq[1] == 'H')
+                {
+                    pos = 0;
+                }
+                else if (seq[1] == 'F')
+                {
+                    pos = len;
+                }
+            }
         }
         else if (c == 127 || c == 8)
         {
@@ -237,6 +310,10 @@ char *repl_readline(ReplState *state, const char *prompt, int indent_level)
         else if (c == 3)
         {
             printf("^C\r\n");
+            if (state)
+            {
+                state->aborted = 1;
+            }
             free(buf);
             if (saved_current_line)
             {
