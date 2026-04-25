@@ -92,7 +92,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        export ZC_HAS_JIT=${{ matrix.zc_has_jit || 1 }}
+        export ZC_HAS_JIT=${{ matrix.zc_has_jit == 0 && 0 || 1 }}
         if [ "${{ matrix.cc }}" = "zig cc" ]; then
            make ZC_HAS_JIT=$ZC_HAS_JIT
         elif [ "${{ runner.os }}" = "Windows" ]; then

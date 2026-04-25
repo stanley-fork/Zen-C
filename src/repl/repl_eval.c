@@ -25,15 +25,30 @@ char *repl_transpile(const char *zen_c_code)
 
     char *c_code = NULL;
     size_t sz = 0;
+#if ZC_OS_WINDOWS
+    FILE *mem = z_tmpfile();
+#else
     FILE *mem = open_memstream(&c_code, &sz);
+#endif
     if (!mem)
     {
         return NULL;
     }
 
     codegen_node(&ctx, root, mem);
-    fclose(mem);
 
+#if ZC_OS_WINDOWS
+    sz = (size_t)ftell(mem);
+    fseek(mem, 0, SEEK_SET);
+    c_code = malloc(sz + 1);
+    if (c_code)
+    {
+        fread(c_code, 1, sz, mem);
+        c_code[sz] = 0;
+    }
+#endif
+
+    fclose(mem);
     return c_code;
 }
 
