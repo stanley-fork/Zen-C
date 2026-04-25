@@ -26,10 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install Cppcheck
-      run: sudo apt-get update && sudo apt-get install -y cppcheck
+    - name: Install Dependencies
+      run: sudo apt-get update && sudo apt-get install -y cppcheck libtcc-dev
     - name: Build Compiler
-      run: make
+      run: make ZC_HAS_JIT=1
     - name: Validate stdlib C Emission
       run: |
         mkdir -p .misra_bin
@@ -60,9 +60,11 @@ jobs:
           - name: macOS
             os: macos-15-intel
             cc: cc # System default (usually clang)
+            zc_has_jit: 0
           - name: Windows MinGW
             os: windows-latest
             cc: gcc
+            zc_has_jit: 0
 
     steps:
     - uses: actions/checkout@v4
@@ -77,17 +79,6 @@ jobs:
       if: runner.os == 'Linux' && !matrix.install_tcc
       run: sudo apt-get update && sudo apt-get install -y libtcc-dev
 
-    - name: Install LibTCC (macOS)
-      if: runner.os == 'macOS'
-      run: brew install tcc
-
-    - name: Install LibTCC (Windows)
-      if: runner.os == 'Windows'
-      shell: powershell
-      run: |
-        scoop install tinycc
-        echo "C:\tools\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
     - name: Install TCC (Source)
       if: matrix.install_tcc
       run: |
@@ -101,12 +92,13 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        export ZC_HAS_JIT=${{ matrix.zc_has_jit || 1 }}
         if [ "${{ matrix.cc }}" = "zig cc" ]; then
-           make  # Build zc with default CC (stable), but test zc using zig cc backend
+           make ZC_HAS_JIT=$ZC_HAS_JIT
         elif [ "${{ runner.os }}" = "Windows" ]; then
            ./build.bat
         else
-           make CC="${{ matrix.cc }}"
+           make CC="${{ matrix.cc }}" ZC_HAS_JIT=$ZC_HAS_JIT
         fi
 
     - name: Run Tests
@@ -130,9 +122,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Install libtcc-dev
+      run: sudo apt-get update && sudo apt-get install -y libtcc-dev
     - name: Build and Run LSP Tests
       run: |
-        make test-lsp
+        make test-lsp ZC_HAS_JIT=1
 
   ape:
     name: Build APE

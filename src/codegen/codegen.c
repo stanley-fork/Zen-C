@@ -570,7 +570,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                     call_name = meth;
                 }
 
-                fprintf(out, "%s(", sig->link_name ? sig->link_name : call_name);
+                fprintf(out, "%s(", (sig && sig->link_name) ? sig->link_name : call_name);
 
                 if (node->binary.left->type == NODE_EXPR_VAR ||
                     node->binary.left->type == NODE_EXPR_INDEX ||

@@ -447,14 +447,22 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
                 }
                 else
                 {
-                    char *v = strrchr(c->match_case.pattern, '_');
+                    char *v = strstr(c->match_case.pattern, "::");
                     if (v)
                     {
-                        v++;
+                        v += 2;
                     }
                     else
                     {
-                        v = c->match_case.pattern;
+                        v = strrchr(c->match_case.pattern, '_');
+                        if (v)
+                        {
+                            v++;
+                        }
+                        else
+                        {
+                            v = (char *)c->match_case.pattern;
+                        }
                     }
 
                     if (c->match_case.binding_count > 1)
