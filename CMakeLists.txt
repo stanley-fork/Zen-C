@@ -112,6 +112,7 @@ set(SRCS
     src/repl/repl_highlight.c
     src/repl/repl_readline.c
     src/repl/repl_eval.c
+    src/repl/repl_jit.c
     src/repl/repl_commands.c
     src/platform/os.c
     src/platform/console.c
@@ -132,8 +133,14 @@ set(SRCS
     std/third-party/tre/lib/xmalloc.c
 )
 
+# --- Find JIT Backend (LibTCC) ---
+find_library(TCC_LIBRARY NAMES tcc libtcc)
+if(NOT TCC_LIBRARY)
+    message(FATAL_ERROR "libtcc not found. Please install TinyCC development package.")
+endif()
+
 # Platform-specific library logic
-set(PLATFORM_LIBS Threads::Threads)
+set(PLATFORM_LIBS Threads::Threads ${TCC_LIBRARY})
 if(WIN32)
     # Winsock 2 for Networking, ws2_32 is required for our socket abstraction
     list(APPEND PLATFORM_LIBS ws2_32)

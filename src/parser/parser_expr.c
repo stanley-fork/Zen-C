@@ -5830,7 +5830,7 @@ static ASTNode *parse_expr_prec_impl(ParserContext *ctx, Lexer *l, Precedence mi
 
                 lexer_next(l); // consume ?
                 ASTNode *true_expr = parse_expression(ctx, l);
-                expect(l, TOK_COLON, "Expected : in ternary");
+                z_parse_expect(l, TOK_COLON, "Expected : in ternary");
                 ASTNode *false_expr = parse_expr_prec(ctx, l, PREC_TERNARY); // Right associative
 
                 ASTNode *tern = ast_create(NODE_TERNARY);

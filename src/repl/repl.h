@@ -7,6 +7,6 @@
  *
  * @param self_path Path to the executable/ZC compiler itself.
  */
-void run_repl(const char *self_path);
+void run_repl(const char *self_path, int argc, char **argv);
 
 #endif

@@ -233,7 +233,7 @@ while read -r test_file; do
     
     # If passed, clean up. If failed, let the user see the file.
     if [ $exit_code -eq 0 ]; then
-        rm -f "$tmp_out" "${tmp_out}.cpp"
+        rm -f "$tmp_out" "${tmp_out}.c" "${tmp_out}.cpp" "${tmp_out}.m"
     fi
 done <<< "$TEST_LIST"
 
@@ -246,10 +246,10 @@ echo "----------------------------------------"
 
 if [ $FAILED -ne 0 ]; then
     echo -e "Failed tests:$FAILED_TESTS"
-    rm -f test_out_*.out out.c out.cpp
+    rm -f test_out_*.out test_out_*.out.c test_out_*.out.cpp test_out_*.out.m out.c out.cpp out.m
     exit 1
 else
     echo "All tests passed!"
-    rm -f test_out_*.out out.c out.cpp
+    rm -f test_out_*.out test_out_*.out.c test_out_*.out.cpp test_out_*.out.m out.c out.cpp out.m
     exit 0
 fi

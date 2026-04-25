@@ -26,7 +26,7 @@ TARGET = zc$(EXE)
 ifeq ($(OS),Windows_NT)
     LIBS = -lws2_32
 else
-    LIBS = -lm -lpthread -ldl
+    LIBS = -lm -lpthread -ldl -ltcc
 endif
 
 SRCS = src/main.c \
@@ -71,6 +71,7 @@ SRCS = src/main.c \
        src/repl/repl_highlight.c \
        src/repl/repl_readline.c \
        src/repl/repl_eval.c \
+       src/repl/repl_jit.c \
        src/repl/repl_commands.c \
        src/plugins/plugin_manager.c \
        std/third-party/tre/lib/regcomp.c \
@@ -233,7 +234,7 @@ uninstall-ape:
 
 # Clean
 clean:
-	$(RM) $(OBJ_DIR) obj-ape $(TARGET) out.c plugins/*.so a.out* out
+	$(RM) $(OBJ_DIR) obj-ape $(TARGET) out.c out.cpp out.m plugins/*.so a.out* out test_out_*
 	@echo "=> Clean complete!"
 
 # Test

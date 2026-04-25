@@ -40,4 +40,11 @@ void zptr_init_api(ZApi *api, const char *filename, int line, FILE *out, FILE *h
  */
 void zptr_plugin_mgr_cleanup(void);
 
+/**
+ * @brief Unload a plugin by name.
+ * @param name The name of the plugin to unload.
+ * @return int 1 on success, 0 if not found.
+ */
+int zptr_unload_plugin(const char *name);
+
 #endif

@@ -3736,7 +3736,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
 
 ASTNode *parse_block(ParserContext *ctx, Lexer *l)
 {
-    expect(l, TOK_LBRACE, "Expected '{' to start a block");
+    z_parse_expect(l, TOK_LBRACE, "Expected '{' to start a block");
     enter_scope(ctx);
     ASTNode *head = 0, *tail = 0;
     Token t = lexer_peek(l);
@@ -4643,8 +4643,8 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
 char *run_comptime_block(ParserContext *ctx, Lexer *l)
 {
     (void)ctx;
-    expect(l, TOK_COMPTIME, "comptime");
-    expect(l, TOK_LBRACE, "expected { after comptime");
+    z_parse_expect(l, TOK_COMPTIME, "comptime");
+    z_parse_expect(l, TOK_LBRACE, "expected { after comptime");
 
     const char *start = l->src + l->pos;
     int depth = 1;

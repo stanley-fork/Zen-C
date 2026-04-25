@@ -5,8 +5,6 @@
 
 #include "repl_state.h"
 
-/* ── Keyword and type tables ───────────────────────────────────────── */
-
 const char *REPL_KEYWORDS[] = {
     "fn",       "struct",  "var",   "let",   "def",    "const",    "return",  "if",
     "else",     "for",     "while", "do",    "switch", "case",     "default", "break",
@@ -16,8 +14,6 @@ const char *REPL_KEYWORDS[] = {
 
 const char *REPL_TYPES[] = {"void",  "int",      "char",   "float", "double", "long",
                             "short", "unsigned", "signed", "bool",  NULL};
-
-/* ── Brace matching ────────────────────────────────────────────────── */
 
 int find_matching_brace(const char *buf, int pos)
 {
@@ -85,8 +81,6 @@ int find_matching_brace(const char *buf, int pos)
     return -1;
 }
 
-/* ── Visible length (ignoring ANSI escape codes) ───────────────────── */
-
 int get_visible_length(const char *str)
 {
     int len = 0;
@@ -116,8 +110,6 @@ int get_visible_length(const char *str)
     }
     return len;
 }
-
-/* ── Syntax highlighter ────────────────────────────────────────────── */
 
 void repl_highlight(const char *buf, int cursor_pos)
 {
@@ -157,44 +149,71 @@ void repl_highlight(const char *buf, int cursor_pos)
         // Highlight matching braces
         if (idx == brace_pos || idx == match_pos)
         {
-            if (use_color) printf("\033[1;44;37m"); // Bright White on Blue background
+            if (use_color)
+            {
+                printf("\033[1;44;37m"); // Bright White on Blue background
+            }
             putchar(*p);
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
             p++;
             continue;
         }
 
         if (strncmp(p, "//", 2) == 0)
         {
-            if (use_color) printf("\033[1;30m");
+            if (use_color)
+            {
+                printf("\033[1;30m");
+            }
             printf("%s", p);
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
             break;
         }
         else if (*p == ':' && isalpha(p[1]))
         {
-            if (use_color) printf("\033[1;35m");
+            if (use_color)
+            {
+                printf("\033[1;35m");
+            }
             while (*p && !isspace(*p))
             {
                 putchar(*p);
                 p++;
             }
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
         }
         else if (isdigit(*p))
         {
-            if (use_color) printf("\033[1;35m");
+            if (use_color)
+            {
+                printf("\033[1;35m");
+            }
             while (isdigit(*p) || *p == '.' || *p == 'x' || *p == 'X')
             {
                 putchar(*p);
                 p++;
             }
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
         }
         else if (*p == '"' || *p == '\'')
         {
             char quote = *p;
-            if (use_color) printf("\033[1;32m");
+            if (use_color)
+            {
+                printf("\033[1;32m");
+            }
             putchar(*p);
             p++;
             while (*p && *p != quote)
@@ -212,27 +231,48 @@ void repl_highlight(const char *buf, int cursor_pos)
                 putchar(*p);
                 p++;
             }
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
         }
         else if (strchr(",;.", *p))
         {
-            if (use_color) printf("\033[1;30m");
+            if (use_color)
+            {
+                printf("\033[1;30m");
+            }
             putchar(*p);
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
             p++;
         }
         else if (strchr("{}[]()", *p))
         {
-            if (use_color) printf("\033[0;36m");
+            if (use_color)
+            {
+                printf("\033[0;36m");
+            }
             putchar(*p);
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
             p++;
         }
         else if (strchr("+-*/=<>!&|^~%", *p))
         {
-            if (use_color) printf("\033[1;37m");
+            if (use_color)
+            {
+                printf("\033[1;37m");
+            }
             putchar(*p);
-            if (use_color) printf("\033[0m");
+            if (use_color)
+            {
+                printf("\033[0m");
+            }
             p++;
         }
         else if (isalpha(*p) || *p == '_')
@@ -329,7 +369,10 @@ void repl_highlight(const char *buf, int cursor_pos)
                 }
 
                 printf("%s", word);
-                if (use_color) printf("\033[0m");
+                if (use_color)
+                {
+                    printf("\033[0m");
+                }
             }
             else
             {

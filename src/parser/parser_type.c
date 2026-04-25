@@ -578,7 +578,7 @@ Type *parse_type_formal(ParserContext *ctx, Lexer *l)
             wrapped = type_new_ptr(wrapped);
         }
 
-        expect(l, TOK_LPAREN, "Expected '(' for function type");
+        z_parse_expect(l, TOK_LPAREN, "Expected '(' for function type");
 
         // Parse Arguments
         fn_type->arg_count = 0;
@@ -607,7 +607,7 @@ Type *parse_type_formal(ParserContext *ctx, Lexer *l)
                 break;
             }
         }
-        expect(l, TOK_RPAREN, "Expected ')' after function args");
+        z_parse_expect(l, TOK_RPAREN, "Expected ')' after function args");
 
         // Parse Return Type (-> Type)
         if (lexer_peek(l).type == TOK_ARROW)

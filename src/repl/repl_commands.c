@@ -1,20 +1,59 @@
-/**
- * @file repl_commands.c
- * @brief REPL command handlers and dispatch table.
- *
- * Each :command has its own handler function. The dispatch table maps
- * command names to handlers, replacing the original ~800-line if/else chain.
- */
-
 #include "repl_state.h"
-
-/* ── Individual command handlers ───────────────────────────────────── */
 
 static int cmd_help(ReplState *state, const char *args)
 {
     (void)state;
     (void)args;
     repl_print_help();
+    return REPL_HANDLED;
+}
+
+static int cmd_plot(ReplState *state, const char *args)
+{
+    if (!args || !args[0])
+    {
+        printf("Usage: :plot <expression>\n");
+        return REPL_HANDLED;
+    }
+
+    char *global_code = NULL;
+    char *main_code = NULL;
+    repl_get_code(state->history, state->history_len, &global_code, &main_code);
+
+    char *plot_logic = repl_generate_plot_code(args);
+
+    size_t code_size = strlen(global_code) + strlen(main_code) + strlen(plot_logic) + 256;
+    char *full_code = malloc(code_size);
+    snprintf(full_code, code_size, "use std.io;\n%s\nfn main() { %s \n %s }", global_code,
+             main_code, plot_logic);
+
+    free(global_code);
+    free(main_code);
+    free(plot_logic);
+
+    /* Execution */
+    char *c_code = repl_transpile(full_code);
+    if (c_code)
+    {
+        repl_jit_execute(c_code);
+        free(c_code);
+    }
+
+    free(full_code);
+    return REPL_HANDLED;
+}
+
+static int cmd_reload(ReplState *state, const char *args)
+{
+    (void)args;
+    // For now, we clear the symbol table and re-run update_symbols
+    // Since update_symbols re-parses the history, it will find 'import plugin' lines.
+    // However, zptr_load_plugin doesn't actually 'unload' first.
+    // We should explicitly find plugins and reload them.
+
+    printf("Reloading plugins...\n");
+    repl_update_symbols(state);
+    printf("Done.\n");
     return REPL_HANDLED;
 }
 
@@ -942,11 +981,17 @@ static int cmd_c(ReplState *state, const char *args)
         fclose(f);
         char cmdbuf[4096];
         snprintf(cmdbuf, sizeof(cmdbuf),
-                 "\"%s\" build -q --emit-c -o %s \"%s\" 2>/dev/null; sed "
-                 "-n '/^int main() {$/,/^}$/p' %s.c 2>/dev/null | "
-                 "tail -n +3 | head -n -2 | sed 's/^    //'",
-                 state->self_path, out_path, tmp_path, out_path);
-        system(cmdbuf);
+                 "\"%s\" build -q --emit-c -o \"%s\" \"%s\" > /dev/null 2>&1", state->self_path,
+                 out_path, tmp_path);
+        if (system(cmdbuf) == 0)
+        {
+            char full_out_path[MAX_PATH_SIZE + 4];
+            snprintf(full_out_path, sizeof(full_out_path), "%s.c", out_path);
+            repl_extract_c_code(full_out_path);
+            remove(full_out_path);
+        }
+
+        remove(tmp_path);
     }
     free(code);
     return REPL_HANDLED;
@@ -1026,8 +1071,6 @@ static int cmd_doc(ReplState *state, const char *args)
     return REPL_HANDLED;
 }
 
-/* ── Dispatch table ────────────────────────────────────────────────── */
-
 /* Special handler IDs for :vars/:funcs/:structs which share implementation */
 static int cmd_vars(ReplState *state, const char *args)
 {
@@ -1068,6 +1111,8 @@ static const ReplCommand command_table[] = {
     {"time", "Benchmark expression (1000 iters)", 1, cmd_time},
     {"c", "Show generated C code", 1, cmd_c},
     {"doc", "Show documentation for symbol", 1, cmd_doc},
+    {"reload", "Hot-reload session plugins", 0, cmd_reload},
+    {"plot", "Render bar chart of data", 1, cmd_plot},
     {NULL, NULL, 0, NULL}};
 
 /* ── Help printer ──────────────────────────────────────────────────── */

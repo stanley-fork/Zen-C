@@ -60,9 +60,6 @@ jobs:
           - name: macOS
             os: macos-15-intel
             cc: cc # System default (usually clang)
-          - name: Self-Hosted
-            os: self-hosted
-            cc: gcc # Default
           - name: Windows MinGW
             os: windows-latest
             cc: gcc

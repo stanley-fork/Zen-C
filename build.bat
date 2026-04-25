@@ -34,7 +34,7 @@ set SRCS=src\main.c ^
  src\codegen\codegen_utils.c ^
  src\utils\utils.c ^
  src\utils\colors.c ^
- src/utils/cmd.c ^
+ src\utils\cmd.c ^
  src\platform\os.c ^
  src\platform\console.c ^
  src\platform\dylib.c ^
@@ -55,6 +55,11 @@ set SRCS=src\main.c ^
  src\lsp\cJSON.c ^
  src\zen\zen_facts.c ^
  src\repl\repl.c ^
+ src\repl\repl_highlight.c ^
+ src\repl\repl_readline.c ^
+ src\repl\repl_eval.c ^
+ src\repl\repl_jit.c ^
+ src\repl\repl_commands.c ^
  src\plugins\plugin_manager.c ^
  std\third-party\tre\lib\regcomp.c ^
  std\third-party\tre\lib\regerror.c ^
@@ -72,7 +77,7 @@ set SRCS=src\main.c ^
 
 rem Build
 echo Building Zen C (%ZEN_VERSION%)...
-%CC% %CFLAGS% %SRCS% -o zc.exe -lws2_32
+%CC% %CFLAGS% %SRCS% -o zc.exe -lws2_32 -ltcc
 if %ERRORLEVEL% NEQ 0 (
     echo Build failed!
     exit /b %ERRORLEVEL%

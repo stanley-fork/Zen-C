@@ -96,6 +96,10 @@ void repl_error_callback(void *data, Token t, const char *msg);
 void repl_load_docs(ReplState *state);
 const ReplDoc *repl_find_doc(ReplState *state, const char *name);
 void repl_update_symbols(ReplState *state);
+void repl_extract_c_code(const char *filename);
+char *repl_generate_plot_code(const char *expr);
+char *repl_transpile(const char *zen_c_code);
+int repl_jit_execute(const char *c_code);
 
 /* ── repl_commands.c ───────────────────────────────────────────────── */
 int repl_dispatch_command(ReplState *state, const char *cmd_buf);

@@ -978,7 +978,7 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque,
                 lexer_next(l); // eat :
                 Type *ft = parse_type_formal(ctx, l);
                 char *field_type_str = type_to_c_string(ft);
-                expect(l, TOK_SEMICOLON, "Expected ;");
+                z_parse_expect(l, TOK_SEMICOLON, "Expected ;");
 
                 ASTNode *nf = ast_create(NODE_FIELD);
                 nf->field.name = token_strdup(field_name);
@@ -1002,7 +1002,7 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque,
             Type *use_type = parse_type_formal(ctx, l);
             char *use_name = type_to_string(use_type);
 
-            expect(l, TOK_SEMICOLON, "Expected ; after use");
+            z_parse_expect(l, TOK_SEMICOLON, "Expected ; after use");
 
             // Find the definition and COPY fields
             ASTNode *def = find_struct_def(ctx, use_name);
@@ -1052,7 +1052,7 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union, int is_opaque,
         {
             Token f_name = lexer_next(l);
             check_identifier(ctx, f_name);
-            expect(l, TOK_COLON, "Expected :");
+            z_parse_expect(l, TOK_COLON, "Expected :");
             Type *ft = parse_type_formal(ctx, l);
             char *f_type = type_to_c_string(ft);
 

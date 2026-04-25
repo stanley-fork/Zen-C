@@ -119,9 +119,10 @@ int main(int argc, char **argv)
     }
     else if (strcmp(command, "repl") == 0)
     {
-        run_repl(argv[0]); // Pass self path for recursive calls
+        run_repl(argv[0], argc, argv); // Pass self path and args for -c support
         return 0;
     }
+
     else if (strcmp(command, "transpile") == 0 || strcmp(command, "-c") == 0)
     {
         g_config.mode_transpile = 1;

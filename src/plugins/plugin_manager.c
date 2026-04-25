@@ -120,7 +120,6 @@ ZPlugin *zptr_load_plugin(const char *path)
     ZPluginInitFn init_fn = (ZPluginInitFn)z_dlsym(handle, "z_plugin_init");
     if (!init_fn)
     {
-        fprintf(stderr, "Plugin '%s' missing 'z_plugin_init' symbol\n", path);
         z_dlclose(handle);
         return NULL;
     }
@@ -128,13 +127,16 @@ ZPlugin *zptr_load_plugin(const char *path)
     ZPlugin *plugin = init_fn();
     if (!plugin)
     {
-        fprintf(stderr, "Plugin '%s' init returned NULL\n", path);
         z_dlclose(handle);
         return NULL;
     }
 
+    /* Hot-reload: Unload existing plugin with the same name if it exists */
+    zptr_unload_plugin(plugin->name);
+
     // Register
     PluginNode *node = malloc(sizeof(PluginNode));
+
     if (node)
     {
         node->plugin = plugin;
@@ -180,4 +182,35 @@ void zptr_plugin_mgr_cleanup(void)
         curr = next;
     }
     head = NULL;
+}
+
+int zptr_unload_plugin(const char *name)
+{
+    PluginNode *curr = head;
+    PluginNode *prev = NULL;
+
+    while (curr)
+    {
+        if (strcmp(curr->plugin->name, name) == 0)
+        {
+            if (prev)
+            {
+                prev->next = curr->next;
+            }
+            else
+            {
+                head = curr->next;
+            }
+
+            if (curr->handle)
+            {
+                z_dlclose(curr->handle);
+            }
+            free(curr);
+            return 1;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+    return 0;
 }

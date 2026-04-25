@@ -1,0 +1,19 @@
+/**
+ * @file repl_jit.h
+ * @brief JIT execution module using LibTCC.
+ */
+
+#ifndef REPL_JIT_H
+#define REPL_JIT_H
+
+#include <libtcc.h>
+
+/**
+ * @brief Executes C code in-process using LibTCC.
+ *
+ * @param c_code The C source code string to compile and run.
+ * @return int 0 on success, non-zero on error.
+ */
+int repl_jit_execute(const char *c_code);
+
+#endif /* REPL_JIT_H */
