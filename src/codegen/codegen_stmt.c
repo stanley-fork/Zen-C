@@ -183,42 +183,22 @@ static void emit_pattern_condition(ParserContext *ctx, const char *pattern, int 
 // Helper
 static bool is_int_type(TypeKind k)
 {
-    switch (k)
+    static const bool is_int[] = {
+        [TYPE_CHAR] = true,    [TYPE_I8] = true,         [TYPE_U8] = true,
+        [TYPE_I16] = true,     [TYPE_U16] = true,        [TYPE_I32] = true,
+        [TYPE_U32] = true,     [TYPE_I64] = true,        [TYPE_U64] = true,
+        [TYPE_I128] = true,    [TYPE_U128] = true,       [TYPE_INT] = true,
+        [TYPE_UINT] = true,    [TYPE_USIZE] = true,      [TYPE_ISIZE] = true,
+        [TYPE_BYTE] = true,    [TYPE_RUNE] = true,       [TYPE_ENUM] = true,
+        [TYPE_C_INT] = true,   [TYPE_C_UINT] = true,     [TYPE_C_LONG] = true,
+        [TYPE_C_ULONG] = true, [TYPE_C_LONGLONG] = true, [TYPE_C_ULONGLONG] = true,
+        [TYPE_C_SHORT] = true, [TYPE_C_USHORT] = true,   [TYPE_C_CHAR] = true,
+        [TYPE_C_UCHAR] = true, [TYPE_BITINT] = true,     [TYPE_UBITINT] = true};
+    if (k >= 0 && k < (int)(sizeof(is_int) / sizeof(is_int[0])))
     {
-    case TYPE_CHAR:
-    case TYPE_I8:
-    case TYPE_U8:
-    case TYPE_I16:
-    case TYPE_U16:
-    case TYPE_I32:
-    case TYPE_U32:
-    case TYPE_I64:
-    case TYPE_U64:
-    case TYPE_I128:
-    case TYPE_U128:
-    case TYPE_INT:
-    case TYPE_UINT:
-    case TYPE_USIZE:
-    case TYPE_ISIZE:
-    case TYPE_BYTE:
-    case TYPE_RUNE:
-    case TYPE_ENUM:
-    case TYPE_C_INT:
-    case TYPE_C_UINT:
-    case TYPE_C_LONG:
-    case TYPE_C_ULONG:
-    case TYPE_C_LONGLONG:
-    case TYPE_C_ULONGLONG:
-    case TYPE_C_SHORT:
-    case TYPE_C_USHORT:
-    case TYPE_C_CHAR:
-    case TYPE_C_UCHAR:
-    case TYPE_BITINT:
-    case TYPE_UBITINT:
-        return true;
-    default:
-        return false;
+        return is_int[k];
     }
+    return false;
 }
 
 void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int use_result)

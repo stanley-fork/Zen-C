@@ -67,42 +67,19 @@ static int get_type_width(Type *t)
         return 0;
     }
     Type *res = resolve_alias(t);
-    switch (res->kind)
+    static const int widths[] = {
+        [TYPE_I8] = 8,        [TYPE_U8] = 8,          [TYPE_CHAR] = 8,         [TYPE_C_CHAR] = 8,
+        [TYPE_C_UCHAR] = 8,   [TYPE_I16] = 16,        [TYPE_U16] = 16,         [TYPE_C_SHORT] = 16,
+        [TYPE_C_USHORT] = 16, [TYPE_I32] = 32,        [TYPE_U32] = 32,         [TYPE_INT] = 32,
+        [TYPE_UINT] = 32,     [TYPE_C_INT] = 32,      [TYPE_C_UINT] = 32,      [TYPE_I64] = 64,
+        [TYPE_U64] = 64,      [TYPE_USIZE] = 64,      [TYPE_ISIZE] = 64,       [TYPE_C_LONG] = 64,
+        [TYPE_C_ULONG] = 64,  [TYPE_C_LONGLONG] = 64, [TYPE_C_ULONGLONG] = 64, [TYPE_F32] = 32,
+        [TYPE_F64] = 64};
+    if (res->kind >= 0 && res->kind < (int)(sizeof(widths) / sizeof(widths[0])))
     {
-    case TYPE_I8:
-    case TYPE_U8:
-    case TYPE_CHAR:
-    case TYPE_C_CHAR:
-    case TYPE_C_UCHAR:
-        return 8;
-    case TYPE_I16:
-    case TYPE_U16:
-    case TYPE_C_SHORT:
-    case TYPE_C_USHORT:
-        return 16;
-    case TYPE_I32:
-    case TYPE_U32:
-    case TYPE_INT:
-    case TYPE_UINT:
-    case TYPE_C_INT:
-    case TYPE_C_UINT:
-        return 32;
-    case TYPE_I64:
-    case TYPE_U64:
-    case TYPE_USIZE:
-    case TYPE_ISIZE:
-    case TYPE_C_LONG:
-    case TYPE_C_ULONG:
-    case TYPE_C_LONGLONG:
-    case TYPE_C_ULONGLONG:
-        return 64;
-    case TYPE_F32:
-        return 32;
-    case TYPE_F64:
-        return 64;
-    default:
-        return 0;
+        return widths[res->kind];
     }
+    return 0;
 }
 
 void misra_check_ess_type_categories(TypeChecker *tc, Type *left, Type *right, Token token)
