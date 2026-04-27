@@ -21,6 +21,18 @@ typedef struct ArenaBlock
 
 static ArenaBlock *current_block = NULL;
 
+void arena_reset(void)
+{
+    ArenaBlock *b = current_block;
+    while (b)
+    {
+        ArenaBlock *next = b->next;
+        (free)(b);
+        b = next;
+    }
+    current_block = NULL;
+}
+
 static void *arena_alloc_raw(size_t size)
 {
     size_t actual_size = size + sizeof(size_t);
@@ -152,7 +164,7 @@ char *z_realpath_arena(const char *path)
     if (real)
     {
         char *res = xstrdup(real);
-        free(real);
+        (free)(real);
         return res;
     }
     return xstrdup(path);

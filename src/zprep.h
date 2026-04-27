@@ -161,6 +161,7 @@ void *xcalloc(size_t n, size_t size) __attribute__((returns_nonnull));
  * @brief Duplicate a string.
  */
 char *xstrdup(const char *s) __attribute__((returns_nonnull));
+void arena_reset(void);
 
 /**
  * @brief Resolve a source file path using include paths and root path.

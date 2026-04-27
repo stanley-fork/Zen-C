@@ -2511,6 +2511,16 @@ char *process_printf_sugar(ParserContext *ctx, Token srctoken, const char *conte
             {
                 // We delegate all primitive type formatting to _z_str()
                 // to ensure platform independence (e.g. usize handling).
+
+                // SPECIAL CASE: C _Generic is strict about pointer types.
+                // int* is NOT compatible with void* or char* in _Generic.
+                // We identify arbitrary pointers here to use %p.
+                if (strstr(inferred_type, "*") && !strstr(inferred_type, "char") &&
+                    strcmp(inferred_type, "string") != 0 && strcmp(inferred_type, "str") != 0)
+                {
+                    format_spec = "%p";
+                }
+
                 if (t)
                 {
                     free(inferred_type);
