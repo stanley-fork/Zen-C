@@ -85,7 +85,7 @@ int main(int argc, char **argv)
 
         while (current_root[0])
         {
-            char check_path[MAX_PATH_SIZE];
+            char check_path[MAX_PATH_SIZE + 32];
             snprintf(check_path, sizeof(check_path), "%s/std.zc", current_root);
             if (access(check_path, F_OK) == 0)
             {

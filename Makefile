@@ -20,7 +20,9 @@ endif
 # To build with clang: make CC=clang
 # To build with zig:   make CC="zig cc"
 GIT_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
-CFLAGS = -std=gnu11 -Wall -Wextra -Wshadow -g -I./src -I./src/ast -I./src/parser -I./src/codegen -I./plugins -I./src/zen -I./src/utils -I./src/lexer -I./src/analysis -I./src/lsp -I./src/diagnostics -I./std/third-party/tre/include -DZEN_VERSION=\"$(GIT_VERSION)\" -DZEN_SHARE_DIR=\"$(SHAREDIR)\"
+SHAREDIR ?= /usr/local/share/zenc
+DEFINES = -DZEN_VERSION=\"$(GIT_VERSION)\" -DZEN_SHARE_DIR=\"$(SHAREDIR)\"
+CFLAGS = -std=gnu11 -Wall -Wextra -Wshadow -g -I./src -I./src/ast -I./src/parser -I./src/codegen -I./plugins -I./src/zen -I./src/utils -I./src/lexer -I./src/analysis -I./src/lsp -I./src/diagnostics -I./std/third-party/tre/include $(DEFINES)
 
 # Toggle plugins
 ifeq ($(NO_PLUGINS), 1)
@@ -174,9 +176,8 @@ $(ZC_COM_BIN): $(ZC_ENTRY_O) $(SRCS) src/plugins/static_plugins.c $(PLUGIN_APE_O
 		PLUGINS= \
 		CC=$(COSMOCC) \
 		OBJ_DIR=obj-ape \
-		ZEN_VERSION="$(GIT_VERSION)" \
+		DEFINES='$(subst ",\",$(DEFINES)) -DZC_STATIC_PLUGINS' \
 		LIBS="$(abspath $(ZC_ENTRY_O)) $(PLUGIN_APE_OBJS) -Wl,--wrap=main" \
-		CFLAGS="$(CFLAGS) -DZC_STATIC_PLUGINS" \
 		SRCS="$(SRCS) src/plugins/static_plugins.c" \
 		TARGET="$(abspath $@)";
 

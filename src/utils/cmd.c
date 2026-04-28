@@ -261,7 +261,7 @@ void build_compile_arg_list(ArgList *list, const char *outfile, const char *temp
         z_get_absolute_path(g_config.root_path, abs_root, sizeof(abs_root));
         arg_list_add_fmt(list, "-I%s", abs_root);
 
-        char tre_path[MAX_PATH_LEN];
+        char tre_path[MAX_PATH_LEN + 64];
         snprintf(tre_path, sizeof(tre_path), "%s/std/third-party/tre/include", abs_root);
 
         if (!g_config.is_freestanding && access(tre_path, F_OK) == 0)
