@@ -697,13 +697,30 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
     {
         const char *final_name = (node->link_name) ? node->link_name : node->func.name;
         fprintf(out, "struct %s_Args {\n", final_name);
+        char *args_copy = xstrdup(node->func.args);
+        char *token = strtok(args_copy, ",");
+        int arg_count = 0;
+        char **arg_names = xmalloc(32 * sizeof(char *));
 
-        for (int i = 0; i < node->func.arg_count; i++)
+        while (token)
         {
-            char *type_c = type_to_c_string(node->func.arg_types[i]);
-            fprintf(out, "    %s %s;\n", map_to_c_type(type_c), node->func.param_names[i]);
-            free(type_c);
+            while (*token == ' ')
+            {
+                token++; // trim leading
+            }
+            char *last_space = strrchr(token, ' ');
+            if (last_space)
+            {
+                *last_space = 0;
+                char *type = token;
+                char *name = last_space + 1;
+                fprintf(out, "%s %s;\n", type, name);
+
+                arg_names[arg_count++] = xstrdup(name);
+            }
+            token = strtok(NULL, ",");
         }
+        free(args_copy);
         fprintf(out, "};\n");
 
         fprintf(out, "void* _runner_%s(void* _args)\n", final_name);
@@ -711,6 +728,7 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
         fprintf(out, "    struct %s_Args* args = (struct %s_Args*)_args;\n", final_name,
                 final_name);
 
+        // Determine mechanism: struct/large-type? -> malloc; primitive -> cast
         int returns_struct = 0;
         char *rt = node->func.ret_type;
         if (node->func.ret_type_info)
@@ -726,22 +744,22 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
             }
         }
 
-        char *rt_c = type_to_c_string(node->func.ret_type_info);
+        // Call Impl
         if (returns_struct)
         {
             if (g_config.use_cpp)
             {
-                fprintf(out, "    %s *res_ptr = (%s*)malloc(sizeof(%s));\n", rt_c, rt_c, rt_c);
+                fprintf(out, "    %s *res_ptr = (%s*)malloc(sizeof(%s));\n", rt, rt, rt);
             }
             else
             {
-                fprintf(out, "    %s *res_ptr = malloc(sizeof(%s));\n", rt_c, rt_c);
+                fprintf(out, "    %s *res_ptr = malloc(sizeof(%s));\n", rt, rt);
             }
             fprintf(out, "    *res_ptr = ");
         }
         else if (rt && strcmp(rt, "void") != 0 && strcmp(rt, "Async") != 0)
         {
-            fprintf(out, "    %s res = ", rt_c);
+            fprintf(out, "    %s res = ", rt);
         }
         else
         {
@@ -749,9 +767,9 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
         }
 
         fprintf(out, "_impl_%s(", final_name);
-        for (int i = 0; i < node->func.arg_count; i++)
+        for (int i = 0; i < arg_count; i++)
         {
-            fprintf(out, "%sargs->%s", i > 0 ? ", " : "", node->func.param_names[i]);
+            fprintf(out, "%sargs->%s", i > 0 ? ", " : "", arg_names[i]);
         }
         fprintf(out, ");\n");
         fprintf(out, "    free(args);\n");
@@ -760,7 +778,7 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
         {
             fprintf(out, "    return (void*)res_ptr;\n");
         }
-        else if (rt && strcmp(rt, "void") != 0 && strcmp(rt, "Async") != 0)
+        else if (strcmp(rt, "void") != 0)
         {
             fprintf(out, "    return (void*)(uintptr_t)res;\n");
         }
@@ -770,9 +788,7 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
         }
         fprintf(out, "}\n");
 
-        fprintf(out, "%s _impl_%s(", rt_c, final_name);
-        emit_func_args(ctx, out, node, NULL, 0);
-        fprintf(out, ")\n");
+        fprintf(out, "%s _impl_%s(%s)\n", node->func.ret_type, final_name, node->func.args);
         fprintf(out, "{\n");
         defer_count = 0;
         char *prev_ret = g_current_func_ret_type;
@@ -792,9 +808,7 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
         fprintf(out, "}\n");
 
         // 4. Define Public Wrapper (Spawns Thread)
-        fprintf(out, "Async %s(", final_name);
-        emit_func_args(ctx, out, node, NULL, 0);
-        fprintf(out, ")\n");
+        fprintf(out, "Async %s(%s)\n", final_name, node->func.args);
         fprintf(out, "{\n");
         if (g_config.use_cpp)
         {
@@ -807,17 +821,21 @@ static void handle_node_function(ParserContext *ctx, ASTNode *node, FILE *out)
             fprintf(out, "    struct %s_Args* args = malloc(sizeof(struct %s_Args));\n", final_name,
                     final_name);
         }
-        for (int i = 0; i < node->func.arg_count; i++)
+        for (int i = 0; i < arg_count; i++)
         {
-            fprintf(out, "    args->%s = %s;\n", node->func.param_names[i],
-                    node->func.param_names[i]);
+            fprintf(out, "    args->%s = %s;\n", arg_names[i], arg_names[i]);
         }
 
         fprintf(out, "    pthread_t th;\n");
         fprintf(out, "    pthread_create(&th, NULL, _runner_%s, args);\n", final_name);
         fprintf(out, "    return (Async){.thread=th, .result=NULL};\n");
         fprintf(out, "}\n");
-        free(rt_c);
+
+        for (int i = 0; i < arg_count; i++)
+        {
+            free(arg_names[i]);
+        }
+        free(arg_names);
 
         if (node->cfg_condition)
         {
