@@ -369,11 +369,11 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
                 int m_is_ptr = has_ref_binding || (expr_type && strchr(expr_type, '*'));
                 const char *acc = m_is_ptr ? "->" : ".";
 
-                if (strcmp(c->match_case.pattern, "Some") == 0)
+                if (c->match_case.pattern && strcmp(c->match_case.pattern, "Some") == 0)
                 {
                     fprintf(out, "_m_%d%sis_some", id, acc);
                 }
-                else if (strcmp(c->match_case.pattern, "None") == 0)
+                else if (c->match_case.pattern && strcmp(c->match_case.pattern, "None") == 0)
                 {
                     fprintf(out, "!_m_%d%sis_some", id, acc);
                 }
@@ -387,11 +387,11 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
                 int m_is_ptr = has_ref_binding || (expr_type && strchr(expr_type, '*'));
                 const char *acc = m_is_ptr ? "->" : ".";
 
-                if (strcmp(c->match_case.pattern, "Ok") == 0)
+                if (c->match_case.pattern && strcmp(c->match_case.pattern, "Ok") == 0)
                 {
                     fprintf(out, "_m_%d%sis_ok", id, acc);
                 }
-                else if (strcmp(c->match_case.pattern, "Err") == 0)
+                else if (c->match_case.pattern && strcmp(c->match_case.pattern, "Err") == 0)
                 {
                     fprintf(out, "!_m_%d%sis_ok", id, acc);
                 }
@@ -403,7 +403,14 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
             else
             {
                 // Use helper for OR patterns, range patterns, and simple patterns
-                emit_pattern_condition(ctx, c->match_case.pattern, id, has_ref_binding, out);
+                if (c->match_case.pattern)
+                {
+                    emit_pattern_condition(ctx, c->match_case.pattern, id, has_ref_binding, out);
+                }
+                else
+                {
+                    fprintf(out, "1");
+                }
             }
         }
 
@@ -417,6 +424,10 @@ void codegen_match_internal(ParserContext *ctx, ASTNode *node, FILE *out, int us
             for (int i = 0; i < c->match_case.binding_count; i++)
             {
                 char *bname = c->match_case.binding_names[i];
+                if (!bname)
+                {
+                    continue;
+                }
                 int is_r = c->match_case.binding_refs ? c->match_case.binding_refs[i] : 0;
 
                 if (is_option)

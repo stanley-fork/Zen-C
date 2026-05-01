@@ -965,9 +965,12 @@ static void find_declared_vars(ASTNode *node, char ***decls, int *count)
         {
             for (int i = 0; i < node->match_case.binding_count; i++)
             {
-                *decls = xrealloc(*decls, sizeof(char *) * (*count + 1));
-                (*decls)[*count] = xstrdup(node->match_case.binding_names[i]);
-                (*count)++;
+                if (node->match_case.binding_names[i])
+                {
+                    *decls = xrealloc(*decls, sizeof(char *) * (*count + 1));
+                    (*decls)[*count] = xstrdup(node->match_case.binding_names[i]);
+                    (*count)++;
+                }
             }
         }
     }
@@ -2275,38 +2278,48 @@ static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
             Token mpeek;
             while (1)
             {
-                mpeek = lexer_peek(l);
-                if (mpeek.type == TOK_ARROW || (mpeek.type == TOK_IDENT && mpeek.len == 2 &&
-                                                strncmp(mpeek.start, "if", 2) == 0))
+                skip_comments(l);
+                Token mpeek2 = lexer_peek(l);
+                if (mpeek2.type == TOK_DCOLON)
                 {
-                    break;
-                }
-                if (mpeek.type == TOK_LPAREN && pat_buf[0] != 0)
-                {
-                    break;
-                }
-
-                Token pt = lexer_next(l);
-                char *s = token_strdup(pt);
-
-                if (pt.type == TOK_DCOLON)
-                {
-                    // For patterns like MyOption::Some, we want to join them as MyOption__Some
-                    // to match the mangled variant name.
-                    // Remove trailing underscore if any (simplified joining logic)
+                    lexer_next(l); // eat ::
                     strncat(pat_buf, "__", sizeof(pat_buf) - strlen(pat_buf) - 1);
                 }
-                else if (pt.type == TOK_COMMA)
+                else if (mpeek2.type == TOK_LANGLE)
                 {
+                    // Handle <T> in patterns by skipping it
+                    lexer_next(l); // eat <
+                    int depth = 1;
+                    while (depth > 0)
+                    {
+                        Token t = lexer_next(l);
+                        if (t.type == TOK_LANGLE)
+                        {
+                            depth++;
+                        }
+                        else if (t.type == TOK_RANGLE)
+                        {
+                            depth--;
+                        }
+                        else if (t.type == TOK_EOF)
+                        {
+                            break;
+                        }
+                    }
+                }
+                else if (mpeek2.type == TOK_COMMA)
+                {
+                    lexer_next(l);
                     strncat(pat_buf, "|", sizeof(pat_buf) - strlen(pat_buf) - 1);
                 }
-                else
+                else if (mpeek2.type == TOK_IDENT)
                 {
+                    Token pt = lexer_next(l);
+                    char *s = token_strdup(pt);
                     strncat(pat_buf, s, sizeof(pat_buf) - strlen(pat_buf) - 1);
+                    free(s);
                 }
-                free(s);
-
-                if (mpeek.type == TOK_IDENT && strcmp(pat_buf, "_") == 0)
+                else
                 {
                     break;
                 }
@@ -2315,24 +2328,22 @@ static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
             char *pattern = xstrdup(pat_buf);
             int is_default = (strcmp(pattern, "_") == 0);
 
-            // Handle Destructuring: Ok(v) or Rect(w, h)
+            // Handle Destructuring: Ok(v) or Rect(w, h) or Point{x, y}
             char **bindings = NULL;
             int *binding_refs = NULL;
             int binding_count = 0;
-            int is_destructure = 0; // Initialize here
+            int is_destructure = 0;
 
-            // Assuming pattern_count is 1 for now, or needs to be determined
-            // For single identifier patterns, pattern_count would be 1.
-            // This logic needs to be adjusted if `pattern_count` is not available or needs to be
-            // calculated. For now, assuming `pattern_count == 1` is implicitly true for single
-            // token patterns.
-            if (!is_default && lexer_peek(l).type == TOK_LPAREN)
+            skip_comments(l);
+            if (!is_default &&
+                (lexer_peek(l).type == TOK_LPAREN || lexer_peek(l).type == TOK_LBRACE))
             {
-                lexer_next(l);                           // eat (
-                bindings = xmalloc(sizeof(char *) * 8);  // Initial capacity
-                binding_refs = xmalloc(sizeof(int) * 8); // unused but consistent
+                int is_brace = (lexer_peek(l).type == TOK_LBRACE);
+                lexer_next(l);                          // eat ( or {
+                bindings = xcalloc(8, sizeof(char *));  // Initial capacity
+                binding_refs = xcalloc(8, sizeof(int)); // unused but consistent
 
-                while (1)
+                while (lexer_peek(l).type != TOK_RPAREN && lexer_peek(l).type != TOK_RBRACE)
                 {
                     int is_r = 0;
                     if (lexer_peek(l).type == TOK_IDENT && lexer_peek(l).len == 3 &&
@@ -2345,10 +2356,42 @@ static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
                     if (b.type != TOK_IDENT)
                     {
                         zpanic_at(b, "Expected binding");
+                        break;
                     }
-                    bindings[binding_count] = token_strdup(b);
+
+                    if (is_brace && lexer_peek(l).type == TOK_COLON)
+                    {
+                        lexer_next(l); // eat :
+                        Token val = lexer_next(l);
+                        if (val.type == TOK_IDENT)
+                        {
+                            char *s = token_strdup(val);
+                            if (strcmp(s, "true") == 0 || strcmp(s, "false") == 0)
+                            {
+                                free(s);
+                                bindings[binding_count] = NULL;
+                            }
+                            else
+                            {
+                                bindings[binding_count] = s;
+                            }
+                        }
+                        else
+                        {
+                            bindings[binding_count] = NULL;
+                        }
+                    }
+                    else
+                    {
+                        bindings[binding_count] = token_strdup(b);
+                    }
+
                     binding_refs[binding_count] = is_r;
-                    binding_count++;
+                    if (bindings[binding_count])
+                    {
+                        binding_count++;
+                    }
+
                     if (lexer_peek(l).type == TOK_COMMA)
                     {
                         lexer_next(l);
@@ -2356,9 +2399,14 @@ static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
                     }
                     break;
                 }
-                if (lexer_next(l).type != TOK_RPAREN)
+                Token end = lexer_next(l);
+                if (is_brace && end.type != TOK_RBRACE)
                 {
-                    zpanic_at(lexer_peek(l), "Expected )");
+                    zpanic_at(end, "Expected }");
+                }
+                else if (!is_brace && end.type != TOK_RPAREN)
+                {
+                    zpanic_at(end, "Expected )");
                 }
                 is_destructure = 1;
             }
@@ -2383,7 +2431,10 @@ static ASTNode *parse_primary_impl(ParserContext *ctx, Lexer *l)
             {
                 for (int i = 0; i < binding_count; i++)
                 {
-                    add_symbol(ctx, bindings[i], NULL, type_new(TYPE_UNSAFE_ANY), 0);
+                    if (bindings[i])
+                    {
+                        add_symbol(ctx, bindings[i], NULL, type_new(TYPE_UNSAFE_ANY), 0);
+                    }
                 }
             }
 

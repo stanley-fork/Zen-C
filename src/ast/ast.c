@@ -1037,6 +1037,8 @@ static char *type_to_c_string_impl(Type *t)
     case TYPE_ENUM:
         return xstrdup(t->link_name ? t->link_name : t->name);
 
+    case TYPE_UNSAFE_ANY:
+        return xstrdup("any");
     default:
         return xstrdup("unknown");
     }

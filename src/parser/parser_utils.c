@@ -1166,7 +1166,7 @@ void register_func(ParserContext *ctx, Scope *scope, const char *name, int count
 
 void register_func_template(ParserContext *ctx, const char *name, const char *param, ASTNode *node)
 {
-    GenericFuncTemplate *t = xmalloc(sizeof(GenericFuncTemplate));
+    GenericFuncTemplate *t = xcalloc(1, sizeof(GenericFuncTemplate));
     t->name = xstrdup(name);
     t->generic_param = xstrdup(param);
     t->func_node = node;
@@ -2731,7 +2731,13 @@ Type *type_from_string_helper(const char *c)
 
 Type *replace_type_formal(Type *t, const char *p, const char *c, const char *os, const char *ns)
 {
-    if (!t)
+    if (!t || (uintptr_t)t < 0x10000)
+    {
+        return NULL;
+    }
+
+    // Defensive check: Ensure kind is valid
+    if ((int)t->kind < 0 || (int)t->kind > 100) // 100 is a safe upper bound for TypeKind
     {
         return NULL;
     }
@@ -2906,10 +2912,20 @@ Type *replace_type_formal(Type *t, const char *p, const char *c, const char *os,
                     }
                 }
 
-                char *new_name =
-                    xmalloc(nlen - slen + strlen(c_suffix) + (num_ptr_suffixes * 3) + 1);
-                strncpy(new_name, t->name, nlen - slen);
-                new_name[nlen - slen] = 0;
+                // Calculate required size more accurately
+                size_t c_suffix_len = strlen(c_suffix);
+                size_t total_needed =
+                    (nlen > slen ? nlen - slen : 0) + c_suffix_len + (num_ptr_suffixes * 3) + 1;
+                char *new_name = xmalloc(total_needed);
+                if (nlen > slen)
+                {
+                    strncpy(new_name, t->name, nlen - slen);
+                    new_name[nlen - slen] = 0;
+                }
+                else
+                {
+                    new_name[0] = 0;
+                }
 
                 // Handle underscore merging: ensure exactly two underscores
                 char *p_end = new_name + strlen(new_name);
@@ -2966,8 +2982,11 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
         return NULL;
     }
 
-    ASTNode *new_node = xmalloc(sizeof(ASTNode));
+    ASTNode *new_node = ast_create(n->type);
+    ASTNode *old_next =
+        new_node->next; // Preserve next if ast_create did something (it doesn't currently)
     *new_node = *n;
+    new_node->next = old_next; // Restore next before recursion
 
     if (n->resolved_type)
     {
@@ -2980,10 +2999,10 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
     switch (n->type)
     {
     case NODE_FUNCTION:
-        new_node->func.name = xstrdup(n->func.name);
+        new_node->func.name = n->func.name ? xstrdup(n->func.name) : NULL;
         new_node->func.ret_type = replace_type_str(n->func.ret_type, p, c, os, ns);
 
-        char *tmp_args = xstrdup(n->func.args);
+        char *tmp_args = n->func.args ? xstrdup(n->func.args) : NULL;
         if (p && c && strchr(p, ','))
         {
             char *p_ptr = (char *)p;
@@ -3191,7 +3210,7 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
     }
     break;
     case NODE_VAR_DECL:
-        new_node->var_decl.name = xstrdup(n->var_decl.name);
+        new_node->var_decl.name = n->var_decl.name ? xstrdup(n->var_decl.name) : NULL;
         new_node->var_decl.type_str = replace_type_str(n->var_decl.type_str, p, c, os, ns);
         new_node->var_decl.type_info = replace_type_formal(n->var_decl.type_info, p, c, os, ns);
         new_node->var_decl.init_expr = copy_ast_replacing(n->var_decl.init_expr, p, c, os, ns);
@@ -3202,10 +3221,10 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
     case NODE_EXPR_BINARY:
         new_node->binary.left = copy_ast_replacing(n->binary.left, p, c, os, ns);
         new_node->binary.right = copy_ast_replacing(n->binary.right, p, c, os, ns);
-        new_node->binary.op = xstrdup(n->binary.op);
+        new_node->binary.op = n->binary.op ? xstrdup(n->binary.op) : NULL;
         break;
     case NODE_EXPR_UNARY:
-        new_node->unary.op = xstrdup(n->unary.op);
+        new_node->unary.op = n->unary.op ? xstrdup(n->unary.op) : NULL;
         new_node->unary.operand = copy_ast_replacing(n->unary.operand, p, c, os, ns);
         break;
     case NODE_EXPR_CALL:
@@ -3216,7 +3235,7 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
         break;
     case NODE_EXPR_VAR:
     {
-        char *n1 = xstrdup(n->var_ref.name);
+        char *n1 = n->var_ref.name ? xstrdup(n->var_ref.name) : NULL;
         if (p && c && strchr(p, ','))
         {
             char *p_ptr = (char *)p;
@@ -3303,18 +3322,19 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
     }
     break;
     case NODE_FIELD:
-        new_node->field.name = xstrdup(n->field.name);
+        new_node->field.name = n->field.name ? xstrdup(n->field.name) : NULL;
         new_node->field.type = replace_type_str(n->field.type, p, c, os, ns);
         break;
     case NODE_EXPR_LITERAL:
         if (n->literal.type_kind == LITERAL_STRING)
         {
-            new_node->literal.string_val = xstrdup(n->literal.string_val);
+            new_node->literal.string_val =
+                n->literal.string_val ? xstrdup(n->literal.string_val) : NULL;
         }
         break;
     case NODE_EXPR_MEMBER:
         new_node->member.target = copy_ast_replacing(n->member.target, p, c, os, ns);
-        new_node->member.field = xstrdup(n->member.field);
+        new_node->member.field = n->member.field ? xstrdup(n->member.field) : NULL;
         break;
     case NODE_EXPR_INDEX:
         new_node->index.array = copy_ast_replacing(n->index.array, p, c, os, ns);
@@ -3460,6 +3480,32 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
             }
             new_node->match_case.pattern = s1;
         }
+        new_node->match_case.binding_count = n->match_case.binding_count;
+        if (n->match_case.binding_names)
+        {
+            new_node->match_case.binding_names =
+                xmalloc(sizeof(char *) * n->match_case.binding_count);
+            for (int i = 0; i < n->match_case.binding_count; i++)
+            {
+                if (n->match_case.binding_names[i])
+                {
+                    new_node->match_case.binding_names[i] = xstrdup(n->match_case.binding_names[i]);
+                }
+                else
+                {
+                    new_node->match_case.binding_names[i] = NULL;
+                }
+            }
+        }
+        if (n->match_case.binding_refs)
+        {
+            new_node->match_case.binding_refs = xmalloc(sizeof(int) * n->match_case.binding_count);
+            memcpy(new_node->match_case.binding_refs, n->match_case.binding_refs,
+                   sizeof(int) * n->match_case.binding_count);
+        }
+        new_node->match_case.is_default = n->match_case.is_default;
+        new_node->match_case.is_destructuring = n->match_case.is_destructuring;
+
         new_node->match_case.body = copy_ast_replacing(n->match_case.body, p, c, os, ns);
         if (n->match_case.guard)
         {
@@ -3472,7 +3518,8 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
         new_node->impl.methods = copy_ast_replacing(n->impl.methods, p, c, os, ns);
         break;
     case NODE_IMPL_TRAIT:
-        new_node->impl_trait.trait_name = xstrdup(n->impl_trait.trait_name);
+        new_node->impl_trait.trait_name =
+            n->impl_trait.trait_name ? xstrdup(n->impl_trait.trait_name) : NULL;
         new_node->impl_trait.target_type =
             replace_type_str(n->impl_trait.target_type, p, c, os, ns);
         new_node->impl_trait.methods = copy_ast_replacing(n->impl_trait.methods, p, c, os, ns);
@@ -3562,6 +3609,114 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
         new_node->destruct.init_expr = copy_ast_replacing(n->destruct.init_expr, p, c, os, ns);
         new_node->destruct.struct_name = replace_type_str(n->destruct.struct_name, p, c, os, ns);
         new_node->destruct.else_block = copy_ast_replacing(n->destruct.else_block, p, c, os, ns);
+        break;
+    case NODE_MATCH:
+        new_node->match_stmt.expr = copy_ast_replacing(n->match_stmt.expr, p, c, os, ns);
+        new_node->match_stmt.cases = copy_ast_replacing(n->match_stmt.cases, p, c, os, ns);
+        break;
+    case NODE_LOOP:
+        new_node->loop_stmt.body = copy_ast_replacing(n->loop_stmt.body, p, c, os, ns);
+        break;
+    case NODE_REPEAT:
+        new_node->repeat_stmt.count = n->repeat_stmt.count ? xstrdup(n->repeat_stmt.count) : NULL;
+        new_node->repeat_stmt.body = copy_ast_replacing(n->repeat_stmt.body, p, c, os, ns);
+        break;
+    case NODE_UNLESS:
+        new_node->unless_stmt.condition =
+            copy_ast_replacing(n->unless_stmt.condition, p, c, os, ns);
+        new_node->unless_stmt.body = copy_ast_replacing(n->unless_stmt.body, p, c, os, ns);
+        break;
+    case NODE_GUARD:
+        new_node->guard_stmt.condition = copy_ast_replacing(n->guard_stmt.condition, p, c, os, ns);
+        new_node->guard_stmt.body = copy_ast_replacing(n->guard_stmt.body, p, c, os, ns);
+        break;
+    case NODE_BREAK:
+    case NODE_CONTINUE:
+        // No members to copy besides next (handled at end)
+        break;
+    case NODE_EXPR_ARRAY_LITERAL:
+        new_node->array_literal.elements =
+            copy_ast_replacing(n->array_literal.elements, p, c, os, ns);
+        new_node->array_literal.count = n->array_literal.count;
+        break;
+    case NODE_EXPR_TUPLE_LITERAL:
+        new_node->tuple_literal.elements =
+            copy_ast_replacing(n->tuple_literal.elements, p, c, os, ns);
+        new_node->tuple_literal.count = n->tuple_literal.count;
+        break;
+    case NODE_EXPR_SLICE:
+        new_node->slice.array = copy_ast_replacing(n->slice.array, p, c, os, ns);
+        new_node->slice.start = copy_ast_replacing(n->slice.start, p, c, os, ns);
+        new_node->slice.end = copy_ast_replacing(n->slice.end, p, c, os, ns);
+        break;
+    case NODE_ASSERT:
+        new_node->assert_stmt.condition =
+            copy_ast_replacing(n->assert_stmt.condition, p, c, os, ns);
+        new_node->assert_stmt.message =
+            n->assert_stmt.message ? xstrdup(n->assert_stmt.message) : NULL;
+        break;
+    case NODE_DEFER:
+        new_node->defer_stmt.stmt = copy_ast_replacing(n->defer_stmt.stmt, p, c, os, ns);
+        break;
+    case NODE_TERNARY:
+        new_node->ternary.cond = copy_ast_replacing(n->ternary.cond, p, c, os, ns);
+        new_node->ternary.true_expr = copy_ast_replacing(n->ternary.true_expr, p, c, os, ns);
+        new_node->ternary.false_expr = copy_ast_replacing(n->ternary.false_expr, p, c, os, ns);
+        break;
+    case NODE_ASM:
+        new_node->asm_stmt.code = n->asm_stmt.code ? xstrdup(n->asm_stmt.code) : NULL;
+        new_node->asm_stmt.is_volatile = n->asm_stmt.is_volatile;
+        new_node->asm_stmt.num_outputs = n->asm_stmt.num_outputs;
+        new_node->asm_stmt.num_inputs = n->asm_stmt.num_inputs;
+        new_node->asm_stmt.num_clobbers = n->asm_stmt.num_clobbers;
+        // ASM usually doesn't contain generic parameters in constraints, but we could harden here
+        // if needed
+        break;
+    case NODE_GOTO:
+        new_node->goto_stmt.label_name =
+            n->goto_stmt.label_name ? xstrdup(n->goto_stmt.label_name) : NULL;
+        break;
+    case NODE_LABEL:
+        new_node->label_stmt.label_name =
+            n->label_stmt.label_name ? xstrdup(n->label_stmt.label_name) : NULL;
+        break;
+    case NODE_DO_WHILE:
+        new_node->while_stmt.condition = copy_ast_replacing(n->while_stmt.condition, p, c, os, ns);
+        new_node->while_stmt.body = copy_ast_replacing(n->while_stmt.body, p, c, os, ns);
+        break;
+    case NODE_TRY:
+        new_node->try_stmt.expr = copy_ast_replacing(n->try_stmt.expr, p, c, os, ns);
+        break;
+    case NODE_REFLECTION:
+        new_node->reflection.kind = n->reflection.kind;
+        new_node->reflection.target_type =
+            replace_type_formal(n->reflection.target_type, p, c, os, ns);
+        break;
+    case NODE_REPL_PRINT:
+        new_node->repl_print.expr = copy_ast_replacing(n->repl_print.expr, p, c, os, ns);
+        break;
+    case NODE_CUDA_LAUNCH:
+        new_node->cuda_launch.call = copy_ast_replacing(n->cuda_launch.call, p, c, os, ns);
+        new_node->cuda_launch.grid = copy_ast_replacing(n->cuda_launch.grid, p, c, os, ns);
+        new_node->cuda_launch.block = copy_ast_replacing(n->cuda_launch.block, p, c, os, ns);
+        new_node->cuda_launch.shared_mem =
+            copy_ast_replacing(n->cuda_launch.shared_mem, p, c, os, ns);
+        new_node->cuda_launch.stream = copy_ast_replacing(n->cuda_launch.stream, p, c, os, ns);
+        break;
+    case NODE_VA_START:
+        new_node->va_start.ap = copy_ast_replacing(n->va_start.ap, p, c, os, ns);
+        new_node->va_start.last_arg = copy_ast_replacing(n->va_start.last_arg, p, c, os, ns);
+        break;
+    case NODE_VA_END:
+        new_node->va_end.ap = copy_ast_replacing(n->va_end.ap, p, c, os, ns);
+        break;
+    case NODE_VA_COPY:
+        new_node->va_copy.dest = copy_ast_replacing(n->va_copy.dest, p, c, os, ns);
+        new_node->va_copy.src = copy_ast_replacing(n->va_copy.src, p, c, os, ns);
+        break;
+    case NODE_VA_ARG:
+        new_node->va_arg.ap = copy_ast_replacing(n->va_arg.ap, p, c, os, ns);
+        new_node->va_arg.type_info = replace_type_formal(n->va_arg.type_info, p, c, os, ns);
         break;
     default:
         break;
@@ -3697,11 +3852,81 @@ FuncSig *find_func(ParserContext *ctx, const char *name)
 
 // Helper function to recursively scan AST for sizeof types AND generic calls to trigger
 // instantiation
+static void trigger_type_instantiation(ParserContext *ctx, Type *t)
+{
+    if (!t)
+    {
+        return;
+    }
+
+    // Handle slices
+    if (t->kind == TYPE_ARRAY && t->array_size == 0 && t->inner)
+    {
+        char *inner_str = type_to_string(t->inner);
+        register_slice(ctx, inner_str);
+        free(inner_str);
+    }
+
+    // Handle mangled types (instantiations)
+    if (t->name && strchr(t->name, '_'))
+    {
+        char *type_copy = xstrdup(t->name);
+        char *underscore = strchr(type_copy, '_');
+        if (underscore)
+        {
+            char *concrete_arg = underscore;
+            while (*concrete_arg == '_')
+            {
+                concrete_arg++;
+            }
+            *underscore = '\0';
+            char *template_name = type_copy;
+
+            GenericTemplate *gt = ctx->templates;
+            int found = 0;
+            while (gt)
+            {
+                if (strcmp(gt->name, template_name) == 0)
+                {
+                    found = 1;
+                    break;
+                }
+                gt = gt->next;
+            }
+
+            if (found)
+            {
+                char *unmangled = unmangle_ptr_suffix(concrete_arg);
+                Token dummy_tok = {0};
+                instantiate_generic(ctx, template_name, concrete_arg, unmangled, dummy_tok);
+                free(unmangled);
+            }
+        }
+        free(type_copy);
+    }
+
+    // Recursive scan
+    trigger_type_instantiation(ctx, t->inner);
+    if (t->args)
+    {
+        for (int i = 0; i < t->arg_count; i++)
+        {
+            trigger_type_instantiation(ctx, t->args[i]);
+        }
+    }
+}
+
 static void trigger_instantiations(ParserContext *ctx, ASTNode *node)
 {
     if (!node)
     {
         return;
+    }
+
+    // Process type information
+    if (node->type_info)
+    {
+        trigger_type_instantiation(ctx, node->type_info);
     }
 
     // Process current node
@@ -3785,6 +4010,46 @@ static void trigger_instantiations(ParserContext *ctx, ASTNode *node)
             }
         }
     }
+    else if (node->type == NODE_EXPR_STRUCT_INIT && node->struct_init.struct_name)
+    {
+        const char *name = node->struct_init.struct_name;
+        if (strchr(name, '_'))
+        {
+            char *type_copy = xstrdup(name);
+            char *underscore = strchr(type_copy, '_');
+            if (underscore)
+            {
+                char *concrete_arg = underscore;
+                while (*concrete_arg == '_')
+                {
+                    concrete_arg++;
+                }
+                *underscore = '\0';
+                char *template_name = type_copy;
+
+                GenericTemplate *gt = ctx->templates;
+                int found = 0;
+                while (gt)
+                {
+                    if (strcmp(gt->name, template_name) == 0)
+                    {
+                        found = 1;
+                        break;
+                    }
+                    gt = gt->next;
+                }
+
+                if (found)
+                {
+                    char *unmangled = unmangle_ptr_suffix(concrete_arg);
+                    Token dummy_tok = {0};
+                    instantiate_generic(ctx, template_name, concrete_arg, unmangled, dummy_tok);
+                    free(unmangled);
+                }
+            }
+            free(type_copy);
+        }
+    }
 
     switch (node->type)
     {
@@ -3852,6 +4117,77 @@ static void trigger_instantiations(ParserContext *ctx, ASTNode *node)
         trigger_instantiations(ctx, node->match_case.guard);
         trigger_instantiations(ctx, node->match_case.body);
         break;
+    case NODE_ASSERT:
+        trigger_instantiations(ctx, node->assert_stmt.condition);
+        break;
+    case NODE_DEFER:
+        trigger_instantiations(ctx, node->defer_stmt.stmt);
+        break;
+    case NODE_UNLESS:
+        trigger_instantiations(ctx, node->unless_stmt.condition);
+        trigger_instantiations(ctx, node->unless_stmt.body);
+        break;
+    case NODE_GUARD:
+        trigger_instantiations(ctx, node->guard_stmt.condition);
+        trigger_instantiations(ctx, node->guard_stmt.body);
+        break;
+    case NODE_LOOP:
+        trigger_instantiations(ctx, node->loop_stmt.body);
+        break;
+    case NODE_REPEAT:
+        trigger_instantiations(ctx, node->repeat_stmt.body);
+        break;
+    case NODE_DO_WHILE:
+        trigger_instantiations(ctx, node->while_stmt.condition);
+        trigger_instantiations(ctx, node->while_stmt.body);
+        break;
+    case NODE_TERNARY:
+        trigger_instantiations(ctx, node->ternary.cond);
+        trigger_instantiations(ctx, node->ternary.true_expr);
+        trigger_instantiations(ctx, node->ternary.false_expr);
+        break;
+    case NODE_EXPR_ARRAY_LITERAL:
+        trigger_instantiations(ctx, node->array_literal.elements);
+        break;
+    case NODE_EXPR_TUPLE_LITERAL:
+        trigger_instantiations(ctx, node->tuple_literal.elements);
+        break;
+    case NODE_EXPR_SLICE:
+        trigger_instantiations(ctx, node->slice.array);
+        trigger_instantiations(ctx, node->slice.start);
+        trigger_instantiations(ctx, node->slice.end);
+        break;
+    case NODE_DESTRUCT_VAR:
+        trigger_instantiations(ctx, node->destruct.init_expr);
+        trigger_instantiations(ctx, node->destruct.else_block);
+        break;
+    case NODE_LAMBDA:
+        trigger_instantiations(ctx, node->lambda.body);
+        break;
+    case NODE_TRY:
+        trigger_instantiations(ctx, node->try_stmt.expr);
+        break;
+    case NODE_CUDA_LAUNCH:
+        trigger_instantiations(ctx, node->cuda_launch.call);
+        trigger_instantiations(ctx, node->cuda_launch.grid);
+        trigger_instantiations(ctx, node->cuda_launch.block);
+        trigger_instantiations(ctx, node->cuda_launch.shared_mem);
+        trigger_instantiations(ctx, node->cuda_launch.stream);
+        break;
+    case NODE_VA_START:
+        trigger_instantiations(ctx, node->va_start.ap);
+        trigger_instantiations(ctx, node->va_start.last_arg);
+        break;
+    case NODE_VA_END:
+        trigger_instantiations(ctx, node->va_end.ap);
+        break;
+    case NODE_VA_COPY:
+        trigger_instantiations(ctx, node->va_copy.dest);
+        trigger_instantiations(ctx, node->va_copy.src);
+        break;
+    case NODE_VA_ARG:
+        trigger_instantiations(ctx, node->va_arg.ap);
+        break;
     default:
         break;
     }
@@ -3906,7 +4242,8 @@ char *instantiate_function_template(ParserContext *ctx, const char *name, const 
         const char *ret = tpl->func_node->func.ret_type;
 
         // Build the param suffix (e.g., for "X,Y,Z" -> "_X_Y_Z")
-        char param_suffix[2048];
+        size_t suffix_cap = strlen(tpl->generic_param) * 2 + 64;
+        char *param_suffix = xmalloc(suffix_cap);
         param_suffix[0] = 0;
         const char *p_ptr = tpl->generic_param;
         while (p_ptr && *p_ptr)
@@ -4022,6 +4359,7 @@ char *instantiate_function_template(ParserContext *ctx, const char *name, const 
             }
             free(struct_base);
         }
+        free(param_suffix);
     }
 
     ASTNode *new_fn = copy_ast_replacing(tpl->func_node, tpl->generic_param, subst_arg, NULL, NULL);
@@ -4261,7 +4599,7 @@ static int is_unmangle_primitive(const char *base)
 
 void register_template(ParserContext *ctx, const char *name, ASTNode *node)
 {
-    GenericTemplate *t = xmalloc(sizeof(GenericTemplate));
+    GenericTemplate *t = xcalloc(1, sizeof(GenericTemplate));
     t->name = xstrdup(name);
     t->struct_node = node;
     t->next = ctx->templates;
@@ -4633,7 +4971,7 @@ void instantiate_generic(ParserContext *ctx, const char *tpl, const char *arg,
         zpanic_at(token, "Unknown generic: %s", tpl);
     }
 
-    Instantiation *ni = xmalloc(sizeof(Instantiation));
+    Instantiation *ni = xcalloc(1, sizeof(Instantiation));
     ni->name = xstrdup(m);
     ni->template_name = xstrdup(tpl);
     ni->concrete_arg = xstrdup(arg);
@@ -4822,10 +5160,29 @@ void instantiate_generic_multi(ParserContext *ctx, const char *tpl, char **args,
     }
 
     // Register instantiation first (to break cycles)
-    Instantiation *ni = xmalloc(sizeof(Instantiation));
+    Instantiation *ni = xcalloc(1, sizeof(Instantiation));
     ni->name = xstrdup(m);
     ni->template_name = xstrdup(tpl);
     ni->concrete_arg = (arg_count > 0) ? xstrdup(args[0]) : xstrdup("T");
+
+    // For multi-param, build a comma-separated string for unmangled_arg
+    size_t u_len = 0;
+    for (int i = 0; i < arg_count; i++)
+    {
+        u_len += strlen(args[i]) + 1;
+    }
+    char *u_buf = xmalloc(u_len + 1);
+    u_buf[0] = 0;
+    for (int i = 0; i < arg_count; i++)
+    {
+        if (i > 0)
+        {
+            strcat(u_buf, ",");
+        }
+        strcat(u_buf, args[i]);
+    }
+    ni->unmangled_arg = u_buf;
+
     ni->struct_node = NULL;
     ni->next = ctx->instantiations;
     ctx->instantiations = ni;
@@ -5542,25 +5899,35 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
     char *buf = xmalloc(buf_size);
     buf[0] = 0;
     int count = 0;
-    char **defaults = xmalloc(sizeof(char *) * 16);
-    ASTNode **default_values = xmalloc(sizeof(ASTNode *) * 16);
-    Type **types = xmalloc(sizeof(Type *) * 16);
-    char **names = xmalloc(sizeof(char *) * 16);
-    char **ctype_overrides = xmalloc(sizeof(char *) * 16);
+    int max_args = 16;
+    char **defaults = xcalloc(max_args, sizeof(char *));
+    ASTNode **default_values = xcalloc(max_args, sizeof(ASTNode *));
+    Type **types = xcalloc(max_args, sizeof(Type *));
+    char **names = xcalloc(max_args, sizeof(char *));
+    char **ctype_overrides = xcalloc(max_args, sizeof(char *));
 
-    for (int i = 0; i < 16; i++)
-    {
-        defaults[i] = NULL;
-        default_values[i] = NULL;
-        types[i] = NULL;
-        names[i] = NULL;
-        ctype_overrides[i] = NULL;
-    }
+    // Initial 16 entries already zeroed by xcalloc
 
     if (lexer_peek(l).type != TOK_RPAREN)
     {
         while (1)
         {
+            if (count >= max_args)
+            {
+                int new_max = max_args * 2;
+                defaults = xrealloc(defaults, sizeof(char *) * new_max);
+                memset(defaults + max_args, 0, sizeof(char *) * (new_max - max_args));
+                default_values = xrealloc(default_values, sizeof(ASTNode *) * new_max);
+                memset(default_values + max_args, 0, sizeof(ASTNode *) * (new_max - max_args));
+                types = xrealloc(types, sizeof(Type *) * new_max);
+                memset(types + max_args, 0, sizeof(Type *) * (new_max - max_args));
+                names = xrealloc(names, sizeof(char *) * new_max);
+                memset(names + max_args, 0, sizeof(char *) * (new_max - max_args));
+                ctype_overrides = xrealloc(ctype_overrides, sizeof(char *) * new_max);
+                memset(ctype_overrides + max_args, 0, sizeof(char *) * (new_max - max_args));
+                max_args = new_max;
+            }
+
             // Check for @ctype("...") before parameter
             char *ctype_override = NULL;
             if (lexer_peek(l).type == TOK_AT)

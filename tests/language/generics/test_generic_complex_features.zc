@@ -1,0 +1,58 @@
+
+struct Option<T> {
+    has_value: bool;
+    val: T;
+}
+
+fn test_complex_generics<T>(val: T, condition: bool) -> T {
+    // 1. Defer
+    defer {
+        // This should execute at the end
+    }
+
+    // 2. Assert
+    assert(condition, "Condition must be true");
+
+    // 3. Match
+    let opt = Option<T>{ has_value: true, val: val };
+    let res = match opt {
+        Option<T>{ has_value: true, val: v } => v,
+        _ => val,
+    };
+
+    // 4. Ternary
+    let _is_ok = condition ? true : false;
+
+    // 5. Loop (infinite) with break
+    let _i = 0;
+    loop {
+        break;
+    }
+
+    // 6. Unless
+    unless !condition {
+        // Should execute
+    }
+
+    // 7. Guard
+    guard condition else {
+        return val;
+    }
+
+    return res;
+}
+
+test "complex generic features" {
+    let res = test_complex_generics<int>(42, true);
+    assert(res == 42, "Match inside generic failed");
+}
+
+fn test_array_generic<T>(val: T) -> T {
+    let arr: [T] = [val, val];
+    return arr[0];
+}
+
+test "generic array" {
+    let res = test_array_generic<int>(100);
+    assert(res == 100, "Array access inside generic failed");
+}

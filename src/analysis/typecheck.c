@@ -3096,7 +3096,30 @@ static void check_node(TypeChecker *tc, ASTNode *node, int depth)
                     }
                     tc->is_unreachable = match_initial_unreachable;
 
+                    tc_enter_scope(tc);
+                    if (mcase->match_case.binding_count > 0)
+                    {
+                        for (int i = 0; i < mcase->match_case.binding_count; i++)
+                        {
+                            char *bname = mcase->match_case.binding_names[i];
+                            if (bname)
+                            {
+                                // For now, we use UNSAFE_ANY as the binding type
+                                // In a more complete implementation, we'd infer it from the enum
+                                // payload
+                                Type *bt = type_new(TYPE_UNSAFE_ANY);
+                                if (mcase->match_case.binding_refs &&
+                                    mcase->match_case.binding_refs[i])
+                                {
+                                    bt = type_new_ptr(bt);
+                                }
+                                tc_add_symbol(tc, bname, bt, mcase->token, 0);
+                            }
+                        }
+                    }
+
                     check_node(tc, mcase->match_case.body, depth + 1);
+                    tc_exit_scope(tc);
 
                     // MISRA Rule 16.3: An unconditional break or return shall terminate every
                     // switch-clause
@@ -4015,12 +4038,26 @@ int check_program(ParserContext *ctx, ASTNode *root)
     check_program_prepass(&tc, root, 0);
 
     check_node(&tc, root, 0);
+    root->is_checked = 1;
 
-    ASTNode *inst_func = ctx->instantiated_funcs;
-    while (inst_func)
+    // Fixed-point iteration to handle secondary instantiations
+    int changed = 1;
+    while (changed)
     {
-        check_node(&tc, inst_func, 0);
-        inst_func = inst_func->next;
+        changed = 0;
+        ASTNode *inst_func = ctx->instantiated_funcs;
+        while (inst_func)
+        {
+            if (!inst_func->is_checked)
+            {
+                check_node(&tc, inst_func, 0);
+                inst_func->is_checked = 1;
+                changed = 1;
+                // Restart from head to catch newly added instantiations that might be before us
+                break;
+            }
+            inst_func = inst_func->next;
+        }
     }
 
     if (ctx->move_state)

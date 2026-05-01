@@ -179,15 +179,46 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
             Token p = lexer_next(l);
             char *p_str = token_strdup(p);
 
-            while (lexer_peek(l).type == TOK_DCOLON)
+            while (1)
             {
-                lexer_next(l); // eat ::
-                Token suffix = lexer_next(l);
-                char *tmp = xmalloc(strlen(p_str) + suffix.len + 3);
-                // Join with underscore: Result::Ok -> Result__Ok
-                sprintf(tmp, "%s__%.*s", p_str, suffix.len, suffix.start);
-                free(p_str);
-                p_str = tmp;
+                skip_comments(l);
+                Token pk = lexer_peek(l);
+                if (pk.type == TOK_DCOLON)
+                {
+                    lexer_next(l); // eat ::
+                    Token suffix = lexer_next(l);
+                    char *tmp = xmalloc(strlen(p_str) + suffix.len + 3);
+                    // Join with underscore: Result::Ok -> Result__Ok
+                    sprintf(tmp, "%s__%.*s", p_str, suffix.len, suffix.start);
+                    free(p_str);
+                    p_str = tmp;
+                }
+                else if (pk.type == TOK_LANGLE)
+                {
+                    // Handle <T> in patterns by skipping it
+                    lexer_next(l); // eat <
+                    int depth = 1;
+                    while (depth > 0)
+                    {
+                        Token t = lexer_next(l);
+                        if (t.type == TOK_LANGLE)
+                        {
+                            depth++;
+                        }
+                        else if (t.type == TOK_RANGLE)
+                        {
+                            depth--;
+                        }
+                        else if (t.type == TOK_EOF)
+                        {
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    break;
+                }
             }
 
             // Check for range pattern: value..end, value..<end or value..=end
@@ -245,19 +276,22 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
         int is_default = (strcmp(pattern, "_") == 0);
         int is_destructure = 0;
 
-        // Handle Destructuring: Ok(v) or Rect(w, h)
+        // Handle Destructuring: Ok(v) or Rect(w, h) or Point{x, y}
         char **bindings = NULL;
         int *binding_refs = NULL;
         int binding_count = 0;
 
-        if (!is_default && pattern_count == 1 && lexer_peek(l).type == TOK_LPAREN)
+        skip_comments(l);
+        if (!is_default && pattern_count == 1 &&
+            (lexer_peek(l).type == TOK_LPAREN || lexer_peek(l).type == TOK_LBRACE))
         {
-            lexer_next(l); // eat (
+            int is_brace = (lexer_peek(l).type == TOK_LBRACE);
+            lexer_next(l); // eat ( or {
 
-            bindings = xmalloc(sizeof(char *) * 8); // hardcap at 8 for now or realloc
-            binding_refs = xmalloc(sizeof(int) * 8);
+            bindings = xcalloc(8, sizeof(char *)); // hardcap at 8 for now or realloc
+            binding_refs = xcalloc(8, sizeof(int));
 
-            while (1)
+            while (lexer_peek(l).type != TOK_RPAREN && lexer_peek(l).type != TOK_RBRACE)
             {
                 int is_r = 0;
                 // Check for 'ref' keyword
@@ -272,10 +306,35 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
                 if (b.type != TOK_IDENT)
                 {
                     zpanic_at(b, "Expected variable name in pattern");
+                    break;
                 }
-                bindings[binding_count] = token_strdup(b);
+
+                // Handle field: binding in struct patterns
+                if (is_brace && lexer_peek(l).type == TOK_COLON)
+                {
+                    lexer_next(l); // eat :
+                    Token val = lexer_next(l);
+                    if (val.type == TOK_IDENT)
+                    {
+                        bindings[binding_count] = token_strdup(val);
+                    }
+                    else
+                    {
+                        // Constant check, not a binding. For now we just skip it as a binding.
+                        // We should ideally track these for condition generation.
+                        bindings[binding_count] = NULL;
+                    }
+                }
+                else
+                {
+                    bindings[binding_count] = token_strdup(b);
+                }
+
                 binding_refs[binding_count] = is_r;
-                binding_count++;
+                if (bindings[binding_count])
+                {
+                    binding_count++;
+                }
 
                 if (lexer_peek(l).type == TOK_COMMA)
                 {
@@ -285,9 +344,14 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
                 break;
             }
 
-            if (lexer_next(l).type != TOK_RPAREN)
+            Token end = lexer_next(l);
+            if (is_brace && end.type != TOK_RBRACE)
             {
-                zpanic_at(lexer_peek(l), "Expected )");
+                zpanic_at(end, "Expected }");
+            }
+            else if (!is_brace && end.type != TOK_RPAREN)
+            {
+                zpanic_at(end, "Expected )");
             }
             is_destructure = 1;
         }
@@ -372,6 +436,10 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
             for (int i = 0; i < binding_count; i++)
             {
                 char *binding = bindings[i];
+                if (!binding)
+                {
+                    continue;
+                }
                 int is_ref = binding_refs[i];
                 char *binding_type = is_ref ? "void*" : "unknown";
                 Type *binding_type_info = NULL; // Default unknown

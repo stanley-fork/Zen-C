@@ -211,6 +211,7 @@ struct ASTNode
                             // node was defined.
     char *cfg_condition;    // C preprocessor condition from @cfg
     char *link_name;        // Optional override for external C name
+    int is_checked;         // Flag to track semantic analysis (avoid redundant passes).
 
     union
     {

@@ -26,7 +26,7 @@ static void emit_freestanding_preamble(FILE *out)
           "#endif\n",
           out);
     fputs(ZC_TCC_COMPAT_STR, out);
-    fputs("typedef size_t usize;\ntypedef char* string;\n", out);
+    fputs("typedef size_t usize;\ntypedef char* string;\ntypedef intptr_t any;\n", out);
     fputs("#define U0 void\n#define I8 int8_t\n#define U8 uint8_t\n#define I16 "
           "int16_t\n#define U16 uint16_t\n",
           out);
@@ -171,7 +171,7 @@ void emit_preamble(ParserContext *ctx, FILE *out)
             fputs(ZC_C_ARG_GENERIC_STR, out);
         }
 
-        fputs("typedef size_t usize;\ntypedef char* string;\n", out);
+        fputs("typedef size_t usize;\ntypedef char* string;\ntypedef intptr_t any;\n", out);
         if (ctx->has_async)
         {
             fputs("#include <pthread.h>\n", out);
